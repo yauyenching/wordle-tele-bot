@@ -1,6 +1,8 @@
 import telebot
+from telebot import types
 import env
 import re
+from tabulate import tabulate
 
 API_KEY = env.API_KEY
 # print(API_KEY) # ensure that API_KEY is correctly stored
@@ -8,6 +10,17 @@ bot = telebot.TeleBot(API_KEY)
 
 # Dictionary with Telegram user id as key and class as value
 score_dict = dict()
+
+USER_STATS = ("*Name*: {} \n"
+              "*\# of Games*: 1 \n"
+              "*Current Streak*: 1 \n"
+              "*Average Score*: {}/6")
+
+ADDED_TEXT = ("New Wordle champion *{}* added to the leaderboard with the stats:"
+              "\n\n"
+              + USER_STATS +
+              "\n\n"
+              "To manually update any of these values, use /name, /games, /streak, and /average\.")
 
 class WordleScore:
   def __init__(self, user_name, score_avg, scores, num_games, last_game, current_streak):
@@ -64,7 +77,7 @@ class WordleScore:
   def updateScore(self, edition, tries):
     self.num_games += 1
     self.score_avg = (self.score_avg + tries)/self.num_games
-    if self.last_game == self.edition + 1:
+    if self.last_game == edition + 1:
       self.current_streak += 1
     else:
       self.current_streak = 0
@@ -78,10 +91,48 @@ def greet(message):
 @bot.message_handler(regexp='Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}')
 def add_score(message):
   m = re.match(r"Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}", message.text)
-  # bot.reply_to(message, "For Wordle {}, {} got a score of {} out of 6.".format(m.group('game_id'), message.from_user.first_name, m.group('tries')))
-  user_score = score_dict[message.from_user.id]
-  user_score.updateScore(m.group('edition'), m.group('tries'))
+  user_id = message.from_user.id
+  user_name = message.from_user.first_name
+  user_score = score_dict.get(user_id)
+  edition = int(m.group('edition'))
+  tries = int(m.group('tries'))
+  if user_score == None:
+    score_dict[user_id] = WordleScore(user_name,
+                                      tries,
+                                      {edition: tries},
+                                      1,
+                                      edition,
+                                      1)
+    bot.send_message(message.chat.id, ADDED_TEXT.format(user_name, user_name, tries), parse_mode="MarkdownV2")
+  else:
+    user_score.updateScore(edition, tries)
   
+@bot.message_handler(commands=['clear'])
+def clear(message):
+  warning_text = "Are you sure you want to clear the leaderboard database?\n\n⚠ *WARNING:*\n pressing 'Yes' will cause you to *permanently* lose your data\!"
+  markup = types.InlineKeyboardMarkup(row_width=2)
+  markup.add(types.InlineKeyboardButton(text='Yes', callback_data='yes'), types.InlineKeyboardButton(text='No', callback_data='no'))
+  bot.send_message(message.chat.id, 
+                   warning_text,
+                   reply_markup=markup,
+                   parse_mode="MarkdownV2")
+  
+@bot.callback_query_handler(func=lambda call: True)
+def handle_query(call):
+  if call.data == 'yes':
+    score_dict.clear()
+    bot.send_message(call.message.chat.id, "Cleared leaderboard database.")
+    bot.answer_callback_query(callback_query_id=call.id)
+  else:
+    bot.send_message(call.message.chat.id, "Clear aborted.")
+    bot.answer_callback_query(callback_query_id=call.id)
+  bot.edit_message_reply_markup(inline_message_id=call.inline_message_id, 
+                                message_id=call.message.message_id, 
+                                chat_id=call.message.chat.id, 
+                                reply_markup=types.InlineKeyboardMarkup())
+    
 
+
+  
 
 bot.polling()

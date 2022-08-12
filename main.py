@@ -12,10 +12,10 @@ bot = telebot.TeleBot(API_KEY)
 # Dictionary with Telegram user id as key and class as value
 score_dict = dict()
 
-USER_STATS = ("*Name*: {} \n"
-              "*\# of Games*: {} \n"
-              "*Current Streak*: {} \n"
-              "*Average Score*: {}/6")
+USER_STATS = ("`Name: {} \n"
+              "\# of Games: {} \n"
+              "Streak: {} \n"
+              "Avg. Score: {}/6`")
 
 ADDED_TEXT = ("New Wordle champion *{}* added to the leaderboard with the stats:"
               "\n\n"
@@ -48,10 +48,10 @@ class WordleScore:
     self.last_game      = edition  # updated with score message
     self.current_streak = 1        # updated with score message
     
-    # Define dictionary containing Wordle data
-    data = {'Edition': [edition],
-            'Tries': [tries]}
-    self.scores = pd.DataFrame(data)
+    # # Define dictionary containing Wordle data
+    # data = {'Edition': [edition],
+    #         'Tries': [tries]}
+    # self.scores = pd.DataFrame(data)
     
   def setCurrentStreak(self, last_game, current_streak):
     self.last_game = self.last_game
@@ -85,13 +85,15 @@ class WordleScore:
     if self.last_game == edition + 1:
       self.current_streak += 1
     else:
-      self.current_streak = 0
+      self.current_streak = 1
     self.last_game = edition
-    self.scores = self.scores.append({'Edition': edition, 'Tries': tries})
+    # self.scores = self.scores.append({'Edition': edition, 'Tries': tries})
     
-  def printStats(self):
-    USER_STATS.format(self.user_name)
-
+  def printStats(self, chat_id):
+    score = str(self.score_avg).replace(".", "\.")
+    message = "Stats for *{}*:\n\n".format(self.user_name) + USER_STATS.format(self.user_name, self.num_games, self.current_streak, score)
+    bot.send_message(chat_id, message, parse_mode="MarkdownV2")
+    
 @bot.message_handler(commands=['greet'])
 def greet(message):
   bot.send_message(message.chat.id, "Hey! How's it going?")
@@ -109,6 +111,15 @@ def add_score(message):
     bot.send_message(message.chat.id, ADDED_TEXT.format(user_name, user_name, tries), parse_mode="MarkdownV2")
   else:
     user_score.updateScore(edition, tries)
+    
+@bot.message_handler(commands=['stats'])
+def stats(message):
+  user_id = message.from_user.id
+  user_score = score_dict.get(user_id)
+  if user_score == None:
+    bot.send_message(message.chat.id, "No data for {} yet! Share Wordle results for today to add yourself to the database.".format(message.from_user.first_name))
+  else:
+    user_score.printStats(message.chat.id)
   
 @bot.message_handler(commands=['clear'])
 def clear(message):

@@ -8,11 +8,8 @@ import pandas as pd
 API_KEY = config('API_KEY')
 bot = telebot.TeleBot(API_KEY)
 
-# Dictionary with Telegram user id as key and class as value
+# Dictionary with Telegram chat id as key then user id as key and class as value
 score_dict = dict()
-
-# Latest game recorded for recording streak
-latest_game = 0
 
 USER_STATS = (
               "`Name: {}\n"
@@ -91,6 +88,8 @@ class WordleScore:
 
   #--------------------------------------------------FUNCTIONS
   def update_score(self, chat_id, edition, tries):
+    if edition > score_dict[chat_id]['latest_game']:
+      score_dict[chat_id]['latest_game'] = edition
     if edition == self.last_game:
       return bot.send_message(chat_id, "Today's Wordle has already been computed into your average, {}!".format(self.username))
     elif edition >= self.last_game:
@@ -104,8 +103,13 @@ class WordleScore:
     self.num_games += 1
     self.score_avg = (self.score_avg * (self.num_games - 1) +
                       tries)/self.num_games
+    
+  def update_streak(self, chat_id):
+    if self.last_game < score_dict[chat_id]['latest_game']:
+      self.streak = 0
 
   def print_stats(self, chat_id):
+    self.update_streak(chat_id)
     score_avg = "{:.2f}".format(self.score_avg).replace(".", "\.")
     if self.streak > 1:
       streak_status = " 🔥"
@@ -126,23 +130,26 @@ def greet(message):
 def add_score(message, user_id, user_name, text):
   m = re.match(
       r"Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}", text)
-  user_score = score_dict.get(user_id)
+  user_score = score_dict[message.chat.id].get(user_id)
   edition = int(m.group('edition'))
   tries = m.group('tries')
   if tries == "X":
     tries = 7.0
   else:
     tries = float(tries)
-  if edition > latest_game:
-    latest_game = edition
   if user_score == None:
-    score_dict[user_id] = WordleScore(user_name, edition, tries)
+    score_dict[message.chat.id][user_id] = WordleScore(user_name, edition, tries)
     bot.send_message(message.chat.id, ADDED_TEXT.format(
         user_name, user_name, "{:.2f}".format(tries).replace(".", "\.")), parse_mode="MarkdownV2")
   else:
     user_score.update_score(message.chat.id, edition, tries)
 
 #--------------------------------------------------------------USER FUNCTIONS
+@bot.message_handler(commands=['start'])
+def start(message):
+  score_dict[message.chat.id] = {}
+  score_dict[message.chat.id]['latest_game'] = 0
+
 # Update user's data when message matches Wordle Score share regex pattern
 @bot.message_handler(regexp='^Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}')
 def auto_score(message):
@@ -153,7 +160,7 @@ def auto_score(message):
 @bot.message_handler(commands=['stats'])
 def stats(message):
   user_id = message.from_user.id
-  user_score = score_dict.get(user_id)
+  user_score = score_dict[message.chat.id].get(user_id)
   if user_score == None:
     bot.send_message(message.chat.id, "No data recorded for you yet! Share Wordle results to add yourself to the database.")
   else:
@@ -163,9 +170,11 @@ def stats(message):
 @bot.message_handler(commands=['leaderboard'])
 def leaderboard(message):
   leaderboard = []
-  for _, user_data in score_dict.items():
-    data = [user_data.username, user_data.num_games, user_data.streak, "{:.3f}".format(user_data.score_avg).replace(".", "\.")]
-    leaderboard.append(data)
+  for key, user_data in score_dict[message.chat.id].items():
+    if key != 'latest_game':
+      user_data.update_streak(message.chat.id)
+      data = [user_data.username, user_data.num_games, user_data.streak, "{:.3f}".format(user_data.score_avg).replace(".", "\.")]
+      leaderboard.append(data)
   if not leaderboard:
     bot.send_message(message.chat.id, "No data recorded for anyone yet! Start sharing your Wordle results to this chat to enter yourself into the database.")
   else:
@@ -189,7 +198,7 @@ def clear(message):
 @ bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
   if call.data == 'yes':
-    score_dict.clear()
+    score_dict[message.chat.id].clear()
     bot.send_message(call.message.chat.id, "Cleared leaderboard database.")
     bot.answer_callback_query(callback_query_id=call.id)
   else:
@@ -205,7 +214,6 @@ def handle_query(call):
 @ bot.message_handler(commands=['adduser'])
 def manual_score(message):
   _, user_id, user_name, message_text = message.text.split(None, 3)
-  # bot.send_message(message.chat.id, user_id + user_name + message_text)
   add_score(message, user_id, user_name, message_text)
 
 

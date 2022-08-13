@@ -11,6 +11,9 @@ bot = telebot.TeleBot(API_KEY)
 # Dictionary with Telegram user id as key and class as value
 score_dict = dict()
 
+# Latest game recorded for recording streak
+latest_game = 0
+
 USER_STATS = (
               "`Name: {}\n"
               "\# of Games : {}\n"
@@ -103,7 +106,7 @@ class WordleScore:
                       tries)/self.num_games
 
   def print_stats(self, chat_id):
-    score_avg = str(round(self.score_avg, 2)).replace(".", "\.")
+    score_avg = "{:.2f}".format(self.score_avg).replace(".", "\.")
     if self.streak > 1:
       streak_status = " 🔥"
     else:
@@ -115,16 +118,14 @@ class WordleScore:
 
 @bot.message_handler(commands=['greet'])
 def greet(message):
-  bot.send_message(message.chat.id, "Hey! How's it going?")
+  _, test1, test2, *_ = message.text.split()
+  bot.send_message(message.chat.id, "Hey! How's it going?" + test1 + test2)
 
-#--------------------------------------------------------------USER FUNCTIONS
-# Update user's data when message matches Wordle Score share regex pattern
-@bot.message_handler(regexp='Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}')
-def add_score(message):
+#--------------------------------------------------------------AUX FUNCTIONS
+# Update data based on Wordle Score result
+def add_score(message, user_id, user_name, text):
   m = re.match(
-      r"Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}", message.text)
-  user_id = message.from_user.id
-  user_name = message.from_user.first_name
+      r"Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}", text)
   user_score = score_dict.get(user_id)
   edition = int(m.group('edition'))
   tries = m.group('tries')
@@ -132,12 +133,21 @@ def add_score(message):
     tries = 7.0
   else:
     tries = float(tries)
+  if edition > latest_game:
+    latest_game = edition
   if user_score == None:
     score_dict[user_id] = WordleScore(user_name, edition, tries)
     bot.send_message(message.chat.id, ADDED_TEXT.format(
-        user_name, user_name, tries), parse_mode="MarkdownV2")
+        user_name, user_name, "{:.2f}".format(tries).replace(".", "\.")), parse_mode="MarkdownV2")
   else:
     user_score.update_score(message.chat.id, edition, tries)
+
+#--------------------------------------------------------------USER FUNCTIONS
+# Update user's data when message matches Wordle Score share regex pattern
+@bot.message_handler(regexp='^Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}')
+def auto_score(message):
+  # bot.send_message(message.chat.id, "match")
+  add_score(message, message.from_user.id, message.from_user.first_name, message.text)
 
 # Print user's stats upon command
 @bot.message_handler(commands=['stats'])
@@ -154,13 +164,15 @@ def stats(message):
 def leaderboard(message):
   leaderboard = []
   for _, user_data in score_dict.items():
-    data = [user_data.username, user_data.num_games, user_data.streak, user_data.score_avg]
+    data = [user_data.username, user_data.num_games, user_data.streak, "{:.3f}".format(user_data.score_avg).replace(".", "\.")]
     leaderboard.append(data)
   if not leaderboard:
     bot.send_message(message.chat.id, "No data recorded for anyone yet! Start sharing your Wordle results to this chat to enter yourself into the database.")
   else:
-    leaderboard_df = pd.DataFrame(leaderboard, columns=['Name', '# of Gms', 'Streak', 'Avg.'])
-    bot.send_message(message.chat.id, "`{}`".format(tabulate(leaderboard_df.sort_values(by=['Avg.']), headers='keys')), parse_mode="MarkdownV2")
+    leaderboard_df = pd.DataFrame(leaderboard, columns=['Name', 'Gms', '🔥', 'Avg.'])
+    leaderboard_df = leaderboard_df.sort_values(by=['Avg.']).reset_index(drop=True)
+    leaderboard_df.index += 1                                            
+    bot.send_message(message.chat.id, "`{}`".format(tabulate(leaderboard_df, headers='keys')), parse_mode="MarkdownV2")
 
 # Clear database upon command
 @ bot.message_handler(commands=['clear'])
@@ -189,7 +201,12 @@ def handle_query(call):
                                 reply_markup=types.InlineKeyboardMarkup())
 
 #--------------------------------------------------------------DEBUG FUNCTIONS
-# Clear database upon command
-# @ bot.message_handler(commands=['adduser'])
+# Add user manually
+@ bot.message_handler(commands=['adduser'])
+def manual_score(message):
+  _, user_id, user_name, message_text = message.text.split(None, 3)
+  # bot.send_message(message.chat.id, user_id + user_name + message_text)
+  add_score(message, user_id, user_name, message_text)
 
-bot.polling()
+
+bot.infinity_polling()

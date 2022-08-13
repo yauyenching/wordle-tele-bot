@@ -1,21 +1,19 @@
 import telebot
 from telebot import types
-import env
+from decouple import config
 import re
 from tabulate import tabulate
 import pandas as pd
 
-API_KEY = env.API_KEY
-# print(API_KEY) # ensure that API_KEY is correctly stored
-
+API_KEY = config('API_KEY')
 bot = telebot.TeleBot(API_KEY)
 
-"""Dictionary with Telegram user id as key and class as value"""
+# Dictionary with Telegram user id as key and class as value
 score_dict = dict()
 
 USER_STATS = (
-              "`Name: {} \n"
-              "\# of Games : {} \n"
+              "`Name: {}\n"
+              "\# of Games : {}\n"
               "Streak: {}\n"
               "Avg. Score: {}/6`"
               )
@@ -33,7 +31,7 @@ class WordleScore:
 
     Parameters
     ----------
-    user_name: str
+    username: str
       Telegram user first name
     num_games: int
       Total number of games played
@@ -101,11 +99,8 @@ class WordleScore:
         self.streak = 1
       self.last_game = edition
     self.num_games += 1
-    bot.send_message(chat_id, self.score_avg)
     self.score_avg = (self.score_avg * (self.num_games - 1) +
                       tries)/self.num_games
-    bot.send_message(chat_id, self.score_avg)
-    # self.print_stats(chat_id)
 
   def print_stats(self, chat_id):
     score_avg = str(round(self.score_avg, 2)).replace(".", "\.")
@@ -122,7 +117,8 @@ class WordleScore:
 def greet(message):
   bot.send_message(message.chat.id, "Hey! How's it going?")
 
-
+#--------------------------------------------------------------USER FUNCTIONS
+# Update user's data when message matches Wordle Score share regex pattern
 @bot.message_handler(regexp='Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}')
 def add_score(message):
   m = re.match(
@@ -143,7 +139,7 @@ def add_score(message):
   else:
     user_score.update_score(message.chat.id, edition, tries)
 
-
+# Print user's stats upon command
 @bot.message_handler(commands=['stats'])
 def stats(message):
   user_id = message.from_user.id
@@ -153,15 +149,20 @@ def stats(message):
   else:
     user_score.print_stats(message.chat.id)
 
+# Print user leaderboard upon command
+@bot.message_handler(commands=['leaderboard'])
+def leaderboard(message):
+  leaderboard = []
+  for _, user_data in score_dict.items():
+    data = [user_data.username, user_data.num_games, user_data.streak, user_data.score_avg]
+    leaderboard.append(data)
+  if not leaderboard:
+    bot.send_message(message.chat.id, "No data recorded for anyone yet! Start sharing your Wordle results to this chat to enter yourself into the database.")
+  else:
+    leaderboard_df = pd.DataFrame(leaderboard, columns=['Name', '# of Gms', 'Streak', 'Avg.'])
+    bot.send_message(message.chat.id, "`{}`".format(tabulate(leaderboard_df.sort_values(by=['Avg.']), headers='keys')), parse_mode="MarkdownV2")
 
-# @bot.message_handler(commands=['leaderboard'])
-# def leaderboard(message):
-  # data = []
-  # for user, score in score_dict.items():
-  #   user_data = [score.getUserName, score.getAvg
-  #   data.append()
-
-
+# Clear database upon command
 @ bot.message_handler(commands=['clear'])
 def clear(message):
   warning_text = "Are you sure you want to clear the leaderboard database?\n\n⚠ *WARNING:*\n pressing 'Yes' will cause you to *permanently* lose your data\!"
@@ -187,8 +188,8 @@ def handle_query(call):
                                 chat_id=call.message.chat.id,
                                 reply_markup=types.InlineKeyboardMarkup())
 
-
-
-
+#--------------------------------------------------------------DEBUG FUNCTIONS
+# Clear database upon command
+# @ bot.message_handler(commands=['adduser'])
 
 bot.polling()

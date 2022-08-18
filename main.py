@@ -1,12 +1,13 @@
-import telebot
+import telebot, re, json, os
 from telebot import types
 from decouple import config
-import re
 from tabulate import tabulate
 import pandas as pd
+from flask import Flask, request
 
 API_KEY = config('API_KEY')
 bot = telebot.TeleBot(API_KEY)
+server = Flask(__name__)
 
 # Dictionary with Telegram chat id as key then user id as key and class as value
 score_dict = dict()
@@ -103,14 +104,16 @@ class WordleScore:
     self.num_games += 1
     self.score_avg = (self.score_avg * (self.num_games - 1) +
                       tries)/self.num_games
+    save(score_dict)
     
   def update_streak(self, chat_id):
     if self.last_game < score_dict[chat_id]['latest_game']:
       self.streak = 0
+      save(score_dict)
 
   def print_stats(self, chat_id):
     self.update_streak(chat_id)
-    score_avg = "{:.2f}".format(self.score_avg).replace(".", "\.")
+    score_avg = "{:.3f}".format(self.score_avg).replace(".", "\.")
     if self.streak > 1:
       streak_status = " 🔥"
     else:
@@ -119,17 +122,22 @@ class WordleScore:
     message = "Stats for *{}*:\n\n".format(self.username) + USER_STATS.format(self.username, self.num_games, streak, score_avg)
     bot.send_message(chat_id, message, parse_mode="MarkdownV2")
 
-
 @bot.message_handler(commands=['greet'])
 def greet(message):
-  _, test1, test2, *_ = message.text.split()
-  bot.send_message(message.chat.id, "Hey! How's it going?" + test1 + test2)
+  test, test1, test2, *_ = message.text.split()
+  # bot.send_message(message.chat.id, "Hey! How's it going?" + test + test1 + test2)
+  if test == "/greet":
+    bot.send_message(message.chat.id, "hi")
+  else:
+    bot.send_message(message.chat.id, "bye")
 
 #--------------------------------------------------------------AUX FUNCTIONS
 # Update data based on Wordle Score result
 def add_score(message, user_id, user_name, text):
   m = re.match(
       r"Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}", text)
+  if score_dict.get(message.chat.id) == None:
+    score_dict[message.chat.id] = {}
   user_score = score_dict[message.chat.id].get(user_id)
   edition = int(m.group('edition'))
   tries = m.group('tries')
@@ -139,16 +147,26 @@ def add_score(message, user_id, user_name, text):
     tries = float(tries)
   if user_score == None:
     score_dict[message.chat.id][user_id] = WordleScore(user_name, edition, tries)
+    score_dict[message.chat.id]['latest_game'] = edition
+    save(score_dict)
     bot.send_message(message.chat.id, ADDED_TEXT.format(
-        user_name, user_name, "{:.2f}".format(tries).replace(".", "\.")), parse_mode="MarkdownV2")
+        user_name, user_name, "{:.3f}".format(tries).replace(".", "\.")), parse_mode="MarkdownV2")
   else:
     user_score.update_score(message.chat.id, edition, tries)
+    
+def save(dict: dict, filename: str = "database.json") -> None:
+  f = open(filename, "w+", encoding="utf-8")
+  f.write(json.dumps(dict, indent = 4, ensure_ascii=True, default=lambda x: x.__dict__))
+  f.close()
+  
+# def load(filename: str = "database.json") -> dict:
+#   if os.path.exists(filename):
+#     f = open(filename)
 
 #--------------------------------------------------------------USER FUNCTIONS
-@bot.message_handler(commands=['start'])
-def start(message):
-  score_dict[message.chat.id] = {}
-  score_dict[message.chat.id]['latest_game'] = 0
+# @bot.message_handler(commands=['start'])
+# def start(message):
+  
 
 # Update user's data when message matches Wordle Score share regex pattern
 @bot.message_handler(regexp='^Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}')
@@ -198,7 +216,8 @@ def clear(message):
 @ bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
   if call.data == 'yes':
-    score_dict[message.chat.id].clear()
+    _ = score_dict.pop(call.message.chat.id)
+    save(score_dict)
     bot.send_message(call.message.chat.id, "Cleared leaderboard database.")
     bot.answer_callback_query(callback_query_id=call.id)
   else:
@@ -208,6 +227,20 @@ def handle_query(call):
                                 message_id=call.message.message_id,
                                 chat_id=call.message.chat.id,
                                 reply_markup=types.InlineKeyboardMarkup())
+  
+# Manually update data
+@ bot.message_handler(commands=['name', 'games', 'streak', 'average'])
+def manual_set(message):
+  command, input, *_ = message.text.split()
+  user_id = message.from_user.id  
+  if command == '/name':
+    score_dict[message.chat.id][user_id].username = input
+  elif command == '/games':
+    score_dict[message.chat.id][user_id].num_games = input
+  elif command == '/streak':
+    score_dict[message.chat.id][user_id].streak = input
+  else:
+    score_dict[message.chat.id][user_id].score_avg = input
 
 #--------------------------------------------------------------DEBUG FUNCTIONS
 # Add user manually

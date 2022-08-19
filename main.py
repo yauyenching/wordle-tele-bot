@@ -6,6 +6,7 @@ import pandas as pd
 from flask import Flask, request
 
 API_KEY = config('API_KEY')
+ADMIN_ID = config('ADMIN_ID')
 bot = telebot.TeleBot(API_KEY)
 server = Flask(__name__)
 
@@ -135,7 +136,7 @@ def greet(message):
 # Update data based on Wordle Score result
 def add_score(message, user_id, user_name, text):
   m = re.match(
-      r"Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}", text)
+      r"Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️⬜️]+)(?:\r?\n)){1,6}", text)
   if score_dict.get(message.chat.id) == None:
     score_dict[message.chat.id] = {}
   user_score = score_dict[message.chat.id].get(user_id)
@@ -154,31 +155,36 @@ def add_score(message, user_id, user_name, text):
   else:
     user_score.update_score(message.chat.id, edition, tries)
     
+# Save score in local .json file for persistence data storage
 def save(dict: dict, filename: str = "database.json") -> None:
+  print(os.getcwd())
   f = open(filename, "w+", encoding="utf-8")
   f.write(json.dumps(dict, indent = 4, ensure_ascii=True, default=lambda x: x.__dict__))
   f.close()
   
 # def load(filename: str = "database.json") -> dict:
-#   if os.path.exists(filename):
-#     f = open(filename)
-
-#--------------------------------------------------------------USER FUNCTIONS
-# @bot.message_handler(commands=['start'])
-# def start(message):
+#   # if os.path.exists(filename):
+#   f = open(filename)
+    
+# def start(dict: dict, filename: str = "database.json") -> None:
   
 
+#--------------------------------------------------------------USER FUNCTIONS
 # Update user's data when message matches Wordle Score share regex pattern
-@bot.message_handler(regexp='^Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️]+)(?:\r?\n)){1,6}')
+@bot.message_handler(regexp='^Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️⬜️]+)(?:\r?\n)){1,6}')
 def auto_score(message):
-  # bot.send_message(message.chat.id, "match")
+  print("match")
   add_score(message, message.from_user.id, message.from_user.first_name, message.text)
 
 # Print user's stats upon command
 @bot.message_handler(commands=['stats'])
 def stats(message):
   user_id = message.from_user.id
-  user_score = score_dict[message.chat.id].get(user_id)
+  message_scores = score_dict.get(message.chat.id)
+  if message_scores != None:
+    user_score = score_dict[message.chat.id].get(user_id)
+  else:
+    user_score = None
   if user_score == None:
     bot.send_message(message.chat.id, "No data recorded for you yet! Share Wordle results to add yourself to the database.")
   else:
@@ -187,6 +193,11 @@ def stats(message):
 # Print user leaderboard upon command
 @bot.message_handler(commands=['leaderboard'])
 def leaderboard(message):
+  message_scores = score_dict.get(message.chat.id)
+  def no_data():
+    bot.send_message(message.chat.id, "No data recorded for anyone yet! Start sharing your Wordle results to this chat to enter yourself into the database.")
+  if message_scores == None:
+    return no_data()
   leaderboard = []
   for key, user_data in score_dict[message.chat.id].items():
     if key != 'latest_game':
@@ -194,7 +205,7 @@ def leaderboard(message):
       data = [user_data.username, user_data.num_games, user_data.streak, "{:.3f}".format(user_data.score_avg).replace(".", "\.")]
       leaderboard.append(data)
   if not leaderboard:
-    bot.send_message(message.chat.id, "No data recorded for anyone yet! Start sharing your Wordle results to this chat to enter yourself into the database.")
+    return no_data()
   else:
     leaderboard_df = pd.DataFrame(leaderboard, columns=['Name', 'Gms', '🔥', 'Avg.'])
     leaderboard_df = leaderboard_df.sort_values(by=['Avg.']).reset_index(drop=True)
@@ -246,8 +257,9 @@ def manual_set(message):
 # Add user manually
 @ bot.message_handler(commands=['adduser'])
 def manual_score(message):
-  _, user_id, user_name, message_text = message.text.split(None, 3)
-  add_score(message, user_id, user_name, message_text)
-
+  id = message.from_user.id
+  if id == ADMIN_ID:
+    _, user_id, user_name, message_text = message.text.split(None, 3)
+    add_score(message, user_id, user_name, message_text)
 
 bot.infinity_polling()

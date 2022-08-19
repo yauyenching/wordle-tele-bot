@@ -1,127 +1,42 @@
-import telebot, re, json, os
+import telebot, os
 from telebot import types
 from decouple import config
 from tabulate import tabulate
 import pandas as pd
+from types import SimpleNamespace
 from flask import Flask, request
+from utils.score_handler import add_score
+from utils.db_handler import save
 
 API_KEY = config('API_KEY')
-ADMIN_ID = config('ADMIN_ID')
+ADMIN_ID = int(config('ADMIN_ID'))
 bot = telebot.TeleBot(API_KEY)
 server = Flask(__name__)
 
-# Dictionary with Telegram chat id as key then user id as key and class as value
-score_dict = dict()
+# class GlobalDB:
+#   def __init__(self):
+#     """Class storing global data for all chats.
 
-USER_STATS = (
-              "`Name: {}\n"
-              "\# of Games : {}\n"
-              "Streak: {}\n"
-              "Avg. Score: {}/6`"
-              )
-
-ADDED_TEXT = ("New Wordle champion *{}* added to the leaderboard with the stats:"
-              "\n\n"
-              + USER_STATS.format({}, 1, 1, {}) +
-              "\n\n"
-              "To manually update any of these values, use /name, /games, /streak, and /average\.")
-
-
-class WordleScore:
-  def __init__(self, username, edition, tries):
-    """Class storing a Wordle Score.
-
-    Parameters
-    ----------
-    username: str
-      Telegram user first name
-    num_games: int
-      Total number of games played
-    streak: int
-      Current running Wordle streak
-    score_avg: float
-      Total average score
-    last_game: int
-      Last Wordle edition played
-    """
-    self._username = username # updated manually ONLY
-    self._num_games = 1       # updated with score message or manually
-    self._streak = 1          # updated with score message or manually
-    self._score_avg = tries   # updated with score message or manually
-    self.last_game = edition  # updated with score message ONLY
-  
-  #--------------------------------------------------GETTERS
-  @property
-  def username(self):
-    return self._username
-  
-  @property
-  def num_games(self):
-    return self._num_games
-  
-  @property
-  def streak(self):
-    return self._streak
-
-  @property
-  def score_avg(self):
-    return self._score_avg
-
-  #--------------------------------------------------SETTERS
-  @username.setter
-  def username(self, username):
-    username = str(username)
-    self._username = username
+#     Parameters
+#     ----------
+#     username: str
+#       Telegram user first name
+#     num_games: int
+#       Total number of games played
+#     streak: int
+#       Current running Wordle streak
+#     score_avg: float
+#       Total average score
+#     last_game: int
+#       Last Wordle edition played
+#     """
+#     self._chat_data = {} # Dictionary with Telegram chat id as key with namespace as value
     
-  @num_games.setter
-  def num_games(self, num_games):
-    num_games = int(num_games)
-    self._num_games = num_games
-
-  @streak.setter
-  def streak(self, streak):
-    streak = int(streak)
-    self._streak = streak
-
-  @score_avg.setter
-  def score_avg(self, score_avg):
-    score_avg = float(score_avg)
-    self._score_avg = score_avg
-
-  #--------------------------------------------------FUNCTIONS
-  def update_score(self, chat_id, edition, tries):
-    if edition > score_dict[chat_id]['latest_game']:
-      score_dict[chat_id]['latest_game'] = edition
-    if edition == self.last_game:
-      return bot.send_message(chat_id, "Today's Wordle has already been computed into your average, {}!".format(self.username))
-    elif edition >= self.last_game:
-      if edition == self.last_game + 1:
-        # consecutive day
-        self.streak += 1
-      else:
-        # missed a day
-        self.streak = 1
-      self.last_game = edition
-    self.num_games += 1
-    self.score_avg = (self.score_avg * (self.num_games - 1) +
-                      tries)/self.num_games
-    save(score_dict)
+#   #--------------------------------------------------GETTERS
+#   def latest_game(self, chat_id):
+#     score_dict[chat_id]['latest_game']
     
-  def update_streak(self, chat_id):
-    if self.last_game < score_dict[chat_id]['latest_game']:
-      self.streak = 0
-      save(score_dict)
-
-  def print_stats(self, chat_id):
-    self.update_streak(chat_id)
-    score_avg = "{:.3f}".format(self.score_avg).replace(".", "\.")
-    if self.streak > 1:
-      streak_status = " 🔥"
-    else:
-      streak_status = ""
-    streak = str(self.streak) + streak_status
-    message = "Stats for *{}*:\n\n".format(self.username) + USER_STATS.format(self.username, self.num_games, streak, score_avg)
-    bot.send_message(chat_id, message, parse_mode="MarkdownV2")
+score_dict = {}
 
 @bot.message_handler(commands=['greet'])
 def greet(message):
@@ -132,49 +47,12 @@ def greet(message):
   else:
     bot.send_message(message.chat.id, "bye")
 
-#--------------------------------------------------------------AUX FUNCTIONS
-# Update data based on Wordle Score result
-def add_score(message, user_id, user_name, text):
-  m = re.match(
-      r"Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️⬜️]+)(?:\r?\n)){1,6}", text)
-  if score_dict.get(message.chat.id) == None:
-    score_dict[message.chat.id] = {}
-  user_score = score_dict[message.chat.id].get(user_id)
-  edition = int(m.group('edition'))
-  tries = m.group('tries')
-  if tries == "X":
-    tries = 7.0
-  else:
-    tries = float(tries)
-  if user_score == None:
-    score_dict[message.chat.id][user_id] = WordleScore(user_name, edition, tries)
-    score_dict[message.chat.id]['latest_game'] = edition
-    save(score_dict)
-    bot.send_message(message.chat.id, ADDED_TEXT.format(
-        user_name, user_name, "{:.3f}".format(tries).replace(".", "\.")), parse_mode="MarkdownV2")
-  else:
-    user_score.update_score(message.chat.id, edition, tries)
-    
-# Save score in local .json file for persistence data storage
-def save(dict: dict, filename: str = "database.json") -> None:
-  print(os.getcwd())
-  f = open(filename, "w+", encoding="utf-8")
-  f.write(json.dumps(dict, indent = 4, ensure_ascii=True, default=lambda x: x.__dict__))
-  f.close()
-  
-# def load(filename: str = "database.json") -> dict:
-#   # if os.path.exists(filename):
-#   f = open(filename)
-    
-# def start(dict: dict, filename: str = "database.json") -> None:
-  
-
 #--------------------------------------------------------------USER FUNCTIONS
 # Update user's data when message matches Wordle Score share regex pattern
 @bot.message_handler(regexp='^Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️⬜️]+)(?:\r?\n)){1,6}')
 def auto_score(message):
-  print("match")
-  add_score(message, message.from_user.id, message.from_user.first_name, message.text)
+  # print("match")
+  add_score(message, message.from_user.id, message.from_user.first_name, message.text, score_dict, bot)
 
 # Print user's stats upon command
 @bot.message_handler(commands=['stats'])
@@ -188,7 +66,7 @@ def stats(message):
   if user_score == None:
     bot.send_message(message.chat.id, "No data recorded for you yet! Share Wordle results to add yourself to the database.")
   else:
-    user_score.print_stats(message.chat.id)
+    user_score.print_stats(message.chat.id, score_dict, bot)
 
 # Print user leaderboard upon command
 @bot.message_handler(commands=['leaderboard'])
@@ -201,7 +79,7 @@ def leaderboard(message):
   leaderboard = []
   for key, user_data in score_dict[message.chat.id].items():
     if key != 'latest_game':
-      user_data.update_streak(message.chat.id)
+      user_data.update_streak(message.chat.id, score_dict)
       data = [user_data.username, user_data.num_games, user_data.streak, "{:.3f}".format(user_data.score_avg).replace(".", "\.")]
       leaderboard.append(data)
   if not leaderboard:
@@ -258,8 +136,9 @@ def manual_set(message):
 @ bot.message_handler(commands=['adduser'])
 def manual_score(message):
   id = message.from_user.id
+  # print(" ".join(map(str, [ADMIN_ID, id, id == ADMIN_ID])))
   if id == ADMIN_ID:
     _, user_id, user_name, message_text = message.text.split(None, 3)
-    add_score(message, user_id, user_name, message_text)
+    add_score(message, user_id, user_name, message_text, score_dict, bot)
 
 bot.infinity_polling()

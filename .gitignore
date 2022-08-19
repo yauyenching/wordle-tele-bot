@@ -4,5 +4,5 @@ __pycache__/
 # Ignore files related to API keys
 .env
 
-# Ignore database
-database.json
+# Ignore all database files
+*.json

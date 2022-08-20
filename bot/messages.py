@@ -1,14 +1,17 @@
-USER_STATS = (
-              "`Name: {}\n"
-              "\# of Games : {}\n"
-              "Streak: {}\n"
-              "Avg. Score: {:.3f}/6`"
-              )
+def user_stats(username: str, num_games: int, streak: int, score_avg: float) -> str:
+    return (
+        f"`Name: {username}\n"
+        f"\# of Games : {num_games}\n"
+        f"Streak: {streak}\n"
+        f"Avg. Score: {score_avg:.3f}/6`"
+    ).replace(".", "\.")
 
-ADDED_TEXT = (
-              "New Wordle champion *{}* added to the leaderboard with the stats:"
-              "\n\n"
-              + USER_STATS.format({}, 1, 1, {}) +
-              "\n\n"
-              "To manually update any of these values, use /name, /games, /streak, and /average\."
-              )
+
+def added_text(username: str, init_score: float) -> str:
+    return (
+        f"New Wordle champion *{username}* added to the leaderboard with the stats:"
+        "\n\n"
+        + user_stats(username, 1, 1, init_score) +
+        "\n\n"
+        "To manually update any of these values, use /name, /games, /streak, and /average\."
+    )

@@ -2,9 +2,8 @@ import telebot
 import os
 from telebot import types
 from decouple import config
-import pandas as pd
 from flask import Flask, request
-from utils.global_db_handler import GlobalDB
+from handlers.global_db_handler import GlobalDB
 
 API_KEY = config('API_KEY')
 ADMIN_ID = int(config('ADMIN_ID'))
@@ -80,7 +79,7 @@ def manual_set(message):
     command, input, *_ = message.text.split()
     msg = score_db.update_data(
         message.chat.id, message.from_user.id, input, command[1:])
-    bot.send_message(message.chat.id, msg)
+    bot.send_message(message.chat.id, msg, parse_mode="MarkdownV2")
 
 # --------------------------------------------------------------DEBUG FUNCTIONS
 

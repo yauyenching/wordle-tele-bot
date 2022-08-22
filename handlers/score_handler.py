@@ -1,7 +1,4 @@
-from pickletools import int4
-import re
-from telebot import TeleBot
-from bot.messages import user_stats
+from utils.messages import user_stats
 
 class WordleStats:
   def __init__(self, username, edition, tries):
@@ -66,7 +63,8 @@ class WordleStats:
   @score_avg.setter
   def score_avg(self, score_avg):
     score_avg = float(score_avg)
-    self._score_avg = score_avg
+    if score_avg <= 7.0:
+        self._score_avg = score_avg
     
   @last_game.setter
   def last_game(self, last_game):

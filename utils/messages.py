@@ -13,5 +13,5 @@ def added_text(username: str, init_score: float) -> str:
         "\n\n"
         + user_stats(username, 1, 1, init_score) +
         "\n\n"
-        "To manually update any of these values, use /name, /games, /streak, and /average\."
+        "To manually update any of these values, use /µname, /games, /streak, and /average\."
     )

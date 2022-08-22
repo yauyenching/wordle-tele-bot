@@ -1,10 +1,10 @@
 import json
 import re
 from typing import Any
-from utils.chat_db_handler import ChatDB
+from handlers.chat_db_handler import ChatDB
 from telebot import TeleBot
-from bot.messages import added_text
-from utils.score_handler import WordleStats
+from utils.messages import added_text
+from handlers.score_handler import WordleStats
 
 NO_DATA_MSG = "No data recorded for you yet\! Share Wordle results to add yourself to the database\."
 
@@ -45,8 +45,10 @@ class GlobalDB:
             user_data.streak = input
         else:
             user_data.score_avg = input
+            if float(input) > 7.0:
+                return "Sorry, you can only update your score average to have a max value of *7\.0*\!"
 
-        return f"Successfully updated {command} for {old_name} to {input}\!"
+        return f"Successfully updated {command} for {old_name} to *{input}*\!".replace(".", "\.")
 
     def clear_data(self, chat_id: int, user_id: int = 0) -> str:
         request_type = 'user' if user_id else 'chat'

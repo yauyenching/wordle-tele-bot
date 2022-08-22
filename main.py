@@ -1,5 +1,6 @@
 import telebot
 import os
+import json
 from telebot import types
 from decouple import config
 from flask import Flask, request
@@ -10,7 +11,9 @@ ADMIN_ID = int(config('ADMIN_ID'))
 bot = telebot.TeleBot(API_KEY)
 server = Flask(__name__)
 
-score_db = GlobalDB()
+score_db = GlobalDB(init_db=GlobalDB.load())
+# score_db.pprint()
+# print(score_db.get_chat_data("696346783").__dict__.get('_latest_game'))
 
 # --------------------------------------------------------------USER FUNCTIONS
 
@@ -24,7 +27,6 @@ def add_score(message):
         message=message.text,
         username=message.from_user.first_name,
         bot=bot)
-    # message.chat.id, message.from_user.id, message.text, message.from_user.first_name, bot)
 
 
 @bot.message_handler(commands=['stats', 'leaderboard'])
@@ -75,10 +77,19 @@ def handle_query(call):
 
 @ bot.message_handler(commands=['name', 'games', 'streak', 'average'])
 def manual_set(message):
-    """ Allow user to manually update data """
+    """ Allow user to manually set data """
     command, input, *_ = message.text.split()
     msg = score_db.update_data(
-        message.chat.id, message.from_user.id, input, command[1:])
+        message.chat.id, message.from_user.id, message.from_user.username, input, command[1:])
+    bot.send_message(message.chat.id, msg, parse_mode="MarkdownV2")
+
+
+@ bot.message_handler(commands=['adjust'])
+def cumulative_set(message):
+    """ Allow user to cumulatively adjust data """
+    command, old_num_games, old_avg, *_ = message.text.split()
+    msg = score_db.update_data(
+        message.chat.id, message.from_user.id, message.from_user.username, old_num_games, command[1:], old_avg)
     bot.send_message(message.chat.id, msg, parse_mode="MarkdownV2")
 
 # --------------------------------------------------------------DEBUG FUNCTIONS

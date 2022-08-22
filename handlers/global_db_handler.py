@@ -1,5 +1,7 @@
-import json
 import re
+import os
+import pipe
+import jsonpickle
 from typing import Any
 from handlers.chat_db_handler import ChatDB
 from telebot import TeleBot
@@ -19,21 +21,23 @@ class GlobalDB:
         Dictionary with chat id as key and chat data as value
     """
 
-    def __init__(self) -> None:
-        self.global_data: dict[int, ChatDB] = {}
+    def __init__(self, init_db={}) -> None:
+        self.global_data: dict[int, ChatDB] = init_db
 
     # --------------------------------------------------METHODS
     def get_chat_data(self, chat_id: int) -> ChatDB | None:
         return self.global_data.get(chat_id)
 
-    def update_data(self, chat_id: int, user_id: int, input: Any, command: str) -> str:
-        no_update_msg = NO_DATA_MSG + " After being added, you will then be able to update your user data\."
+    def update_data(self, chat_id: int, user_id: int, username: str, input: Any, command: str, input_avg: Any = 0) -> str:
+        no_update_msg = NO_DATA_MSG + \
+            " After being added, you will then be able to update your user data\."
         chat_data = self.get_chat_data(chat_id)
         if chat_data == None:
             return no_update_msg
-        
+
         user_data = chat_data.get_user_data(user_id)
-        old_name = user_data.username
+        
+        res = f"Successfully updated {command} for @{username} to *{input}*\!".replace(".", "\.")
 
         if user_data == None:
             return no_update_msg
@@ -43,17 +47,31 @@ class GlobalDB:
             user_data.num_games = input
         elif command == 'streak':
             user_data.streak = input
-        else:
+        elif command == 'average':
             user_data.score_avg = input
             if float(input) > 7.0:
                 return "Sorry, you can only update your score average to have a max value of *7\.0*\!"
+        else:
+            old_games = int(input)
+            old_avg = float(input_avg)
+            score_avg = user_data.score_avg
+            num_games = user_data.num_games
+            
+            new_games = num_games + old_games
+            new_avg = ((old_avg * old_games) + (score_avg * num_games)) / new_games
+            
+            user_data.num_games = new_games
+            user_data.score_avg = new_avg
+            
+            res = f"Successfully updated games and average for @{username} to *{new_games}* and *{new_avg:.3f}*\!".replace(".", "\.")
 
-        return f"Successfully updated {command} for {old_name} to *{input}*\!".replace(".", "\.")
+        self.save_json()
+        return res
 
     def clear_data(self, chat_id: int, user_id: int = 0) -> str:
         request_type = 'user' if user_id else 'chat'
         no_data_msg = f"No {request_type} data to clear!"
-        
+
         chat_data = self.get_chat_data(chat_id)
 
         if chat_data == None:
@@ -98,11 +116,12 @@ class GlobalDB:
             res = chat_data.update_user_data(
                 user_id=user_id, username=username, edition=edition, tries=tries)
             if isinstance(res, str):  # data already recorded for today's Wordle
-                bot.send_message(chat_id, res) 
-            else: # update successful
+                bot.send_message(chat_id, res)
+            else:  # update successful
                 self.save_json()
-                if res: # new user added
-                    bot.send_message(chat_id, new_user_msg, parse_mode="MarkdownV2")
+                if res:  # new user added
+                    bot.send_message(chat_id, new_user_msg,
+                                     parse_mode="MarkdownV2")
 
     def print_scores(self, chat_id: int, user_id: int = 0) -> str:
         """ Send pretty printed requested stats """
@@ -110,8 +129,9 @@ class GlobalDB:
             cmd_msg = "your stats"
         else:
             cmd_msg = "the chat's leaderboard"
-        no_update_msg = NO_DATA_MSG + f" After being added, you will then be able to print {cmd_msg}\."
-        
+        no_update_msg = NO_DATA_MSG + \
+            f" After being added, you will then be able to print {cmd_msg}\."
+
         chat_data = self.get_chat_data(chat_id)
         if chat_data == None:
             return no_update_msg
@@ -135,12 +155,20 @@ class GlobalDB:
         """ Save score in local .json file for persistence data storage """
         # print(os.getcwd())
         f = open(filename, "w+", encoding="utf-8")
-        f.write(json.dumps(self.global_data, indent=4, ensure_ascii=True,
-                default=lambda x: x.__dict__))
+        f.write(jsonpickle.encode(self.global_data, indent=4, keys=True))
         f.close()
 
-    def load(filename: str = "database.json") -> dict:
-        # if os.path.exists(filename):
-        f = open(filename)
-        db = json.loads(f.read())
-    # def start(dict: dict, filename: str = "database.json") -> None:
+    def load(filename: str = "database.json") -> dict[int, ChatDB]:
+        print(os.path.exists(filename))
+        if os.path.exists(filename):
+            f = open(filename)
+            res = jsonpickle.decode(f.read(), keys=True)
+            # print(res)
+            print(type(list(res.keys())[0]))
+            return res
+        else:
+            return {}
+
+    def pprint(self) -> None:
+        print(jsonpickle.encode(self.global_data))
+        # print(type(list(self.global_data.keys())[0]))

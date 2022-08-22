@@ -17,11 +17,11 @@ class WordleStats:
     last_game: int
       Last Wordle edition played
     """
-    self._username = username # updated manually ONLY
-    self._num_games = 1       # updated with score message or manually
-    self._streak = 1          # updated with score message or manually
-    self._score_avg = tries   # updated with score message or manually
-    self._last_game = edition  # updated with score message ONLY
+    self._username: str = username   # updated manually ONLY
+    self._num_games: int = 1         # updated with score message or manually
+    self._streak: int = 1            # updated with score message or manually
+    self._score_avg: float = tries   # updated with score message or manually
+    self._last_game: int = edition   # updated with score message ONLY
   
   #--------------------------------------------------GETTERS
   @property
@@ -74,7 +74,7 @@ class WordleStats:
   #--------------------------------------------------METHODS
   def update_stats(self, edition: int, tries: int) -> str | None:
     if edition == self.last_game:
-      return f"Today's Wordle has already been computed into your average, {self.username}\!"
+      return f"Today's Wordle has already been computed into your average, {self.username}!"
     elif edition >= self.last_game:
       if edition == self.last_game + 1:
         # consecutive day
@@ -86,7 +86,6 @@ class WordleStats:
     self.num_games += 1
     self.score_avg = (self.score_avg * (self.num_games - 1) +
                       tries)/self.num_games
-    # save(score_dict)
     
   def update_streak(self, chat_latest_game: int) -> bool:
     if self.last_game < chat_latest_game:
@@ -107,10 +106,3 @@ class WordleStats:
       + user_stats(self.username, self.num_games, streak, self.score_avg)
     )
     return (stats_msg, streak_updated)
-    # "Stats for *{}*:\n\n".format(self.username) + USER_STATS.format(self.username, self.num_games, streak, score_avg)
-    
-  # def from_json(json_dict: dict) -> dict:
-  #   db = {}
-  #   for chat_id, chat_data in json_dict.items():
-  #     db.update({chat_id: {}})
-  #     for chat_id, chat in json_dict.items():

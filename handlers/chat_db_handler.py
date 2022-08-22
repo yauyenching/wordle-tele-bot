@@ -1,6 +1,6 @@
-from handlers.score_handler import WordleStats
 import pandas as pd
 from tabulate import tabulate
+from handlers.score_handler import WordleStats
 
 
 class ChatDB:
@@ -41,7 +41,6 @@ class ChatDB:
             # return res
 
     def print_leaderboard(self) -> tuple[str, bool]:
-
         fields = ['username', 'num_games', 'streak', 'score_avg']
         streak_updated = list(map(lambda x: x.update_streak(self.latest_game), self.chat_data.values()))
         leaderboard_df = pd.DataFrame(
@@ -49,6 +48,7 @@ class ChatDB:
              for user_data in self.chat_data.values()]
         )
         leaderboard_df.columns = ['Name', 'Gms', '🔥', 'Avg.']
+        # leaderboard_df['Avg.'] = leaderboard_df['Avg.'].apply()
         print(streak_updated)
 
         leaderboard_df = leaderboard_df.sort_values(

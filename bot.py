@@ -162,6 +162,5 @@ def webhook():
     bot.set_webhook(url=f'https://wordle-scoreboard-bot-yyc.herokuapp.com/{API_KEY}')
     return "!", 200
     
-    
 if __name__ == "__main__":
     server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8443)))

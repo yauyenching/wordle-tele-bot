@@ -3,8 +3,7 @@ import os
 import pipe
 import jsonpickle
 from typing import Any
-from bot.chat_db_handler import ChatDB
-from telebot import TeleBot
+from telebot import TeleBot, types
 from utils.messages import added_text
 from classes.WordleStats import WordleStats
 from utils.message_handler import extract_score
@@ -20,15 +19,18 @@ class GlobalDB:
 
     Attributes
     ----------
-    chat_data: dict[int, WordleStats]
+    latest_game: int
+        Latest game globally for streak purposes
+    chat_users: dict[int, list[int]]
+        Dictionary with chat id as key and list of user ids as value
+    user_data: dict[int, WordleStats]
         Dictionary with user id as key and user data as value
     """
 
-    def __init__(self, init_game = 0, init_chat_db = {}, init_user_db = {}) -> None:
+    def __init__(self, init_game=0, init_chat_db={}, init_user_db={}) -> None:
         self._latest_game: int = init_game
         self.chat_users: dict[int, list[int]] = init_chat_db
         self.user_data: dict[int, WordleStats] = init_user_db
-        # self.global_data: dict[int, ChatDB] = init_db
 
     # --------------------------------------------------GETTERS
     @property
@@ -53,9 +55,7 @@ class GlobalDB:
         else:
             res = map(lambda user_id: self.get_user_data(
                 user_id), chat_members_ids)
-            res = list(filter(lambda x: x is not None, res))
-            print(res)
-            return res
+            return list(filter(lambda x: x is not None, res))
 
     def get_user_data(self, user_id: int) -> WordleStats | None:
         return self.user_data.get(user_id)
@@ -67,6 +67,40 @@ class GlobalDB:
             return False
         else:
             return user_id in chat_users
+
+    def add_score(self, message: types.Message, bot: TeleBot, debug: bool = False, id: int = 1, name: str = "", txt: str = "") -> None:
+        """ Add Wordle score to user database """
+        chat_id = message.chat.id
+        user_id = message.from_user.id if not debug else id
+        username = message.from_user.first_name if not debug else name
+        text = message.text if not debug else txt
+
+        user_data = self.get_user_data(user_id)
+
+        edition, tries = extract_score(text)
+        self.latest_game = edition
+
+        is_in_chat = self.is_in_chat(chat_id, user_id)
+        if not is_in_chat:
+            self.chat_users[chat_id].append(user_id)
+
+        if user_data == None:  # no data recorded for user yet
+            self.user_data[user_id] = WordleStats(
+                username, edition, tries, chat_id)
+            self.save_json()
+            bot.send_message(chat_id, added_text(
+                username=username, init_score=tries), parse_mode="MarkdownV2")
+        else:  # data for user exists, update user data
+            update, same_chat = user_data.update_stats(edition, tries, chat_id)
+            if update:
+                self.save_json()
+            else:
+                if not is_in_chat:
+                    self.save_json()
+                if same_chat:
+                    bot.reply_to(message,
+                                 f"Today's Wordle has already been computed into your average\!",
+                                 parse_mode="MarkdownV2")
 
     def print_leaderboard(self, chat_data: list[WordleStats]) -> tuple[str, bool]:
         fields = ['username', 'num_games', 'streak', 'score_avg']
@@ -84,32 +118,6 @@ class GlobalDB:
             by=['Avg.']).reset_index(drop=True)
         leaderboard_df.index += 1
         return (f"`{tabulate(leaderboard_df, headers='keys')}`", any(streak_updated))
-
-    def add_score(self, chat_id: int, user_id: int, message: str, username: str, tele_name: str, bot: TeleBot) -> None:
-        """ Add Wordle score to user database """
-        user_data = self.get_user_data(user_id)
-
-        edition, tries = extract_score(message)
-        self.latest_game = edition
-
-        is_in_chat = self.is_in_chat(chat_id, user_id)
-        if not is_in_chat:
-            self.chat_users[chat_id].append(user_id)
-
-        if user_data == None:  # no data recorded for user yet
-            self.user_data[user_id] = WordleStats(username, edition, tries)
-            self.save_json()
-            bot.send_message(chat_id, added_text(username=username, init_score=tries), parse_mode="MarkdownV2")
-        else:  # data for user exists, update user data
-            update = user_data.update_stats(edition, tries)
-            if update:
-                self.save_json()
-            else:
-                if not is_in_chat:
-                    self.save_json()
-                bot.send_message(chat_id, 
-                                 f"Today's Wordle has already been computed into your average, @{tele_name}\!",
-                                 parse_mode="MarkdownV2")
 
     def print_scores(self, chat_id: int, user_id: int = 0) -> str:
         """ Send pretty printed requested stats """
@@ -138,16 +146,13 @@ class GlobalDB:
             self.save_json()
         return print_msg
 
-    def update_data(self, chat_id: int, user_id: int, username: str, input: Any, command: str, input_avg: Any = 0) -> str:
+    def update_data(self, chat_id: int, user_id: int, input: Any, command: str, input_avg: Any = 0) -> str:
         no_update_msg = NO_DATA_MSG + \
             " After being added, you will then be able to update your user data\."
-        chat_data = self.get_chat_data(chat_id)
-        if chat_data == None:
-            return no_update_msg
 
-        user_data = chat_data.get_user_data(user_id)
+        user_data = self.get_user_data(user_id)
 
-        res = f"Successfully updated {command} for @{username} to *{input}*\!".replace(
+        res = f"Successfully updated your {command} to *{input}*\!".replace(
             ".", "\.")
 
         if user_data == None:
@@ -160,6 +165,9 @@ class GlobalDB:
             user_data.streak = input
         elif command == 'average':
             user_data.score_avg = input
+            new_avg = float(input)
+            res = f"Successfully updated your {command} to *{new_avg:.3f}*\!".replace(
+            ".", "\.")
             if float(input) > 7.0:
                 return "Sorry, you can only update your score average to have a max value of *7\.0*\!"
         else:
@@ -175,7 +183,7 @@ class GlobalDB:
             user_data.num_games = new_games
             user_data.score_avg = new_avg
 
-            res = f"Successfully updated games and average for @{username} to *{new_games}* and *{new_avg:.3f}*\!".replace(
+            res = f"Successfully updated your games and average to *{new_games}* and *{new_avg:.3f}*\!".replace(
                 ".", "\.")
 
         self.save_json()
@@ -201,7 +209,6 @@ class GlobalDB:
         f.close()
 
     def load(filename: str = "database.json"):
-        print(os.path.exists(filename))
         if os.path.exists(filename):
             f = open(filename)
             return jsonpickle.decode(f.read(), keys=True)
@@ -210,13 +217,13 @@ class GlobalDB:
 
     def pprint(self) -> None:
         print(jsonpickle.encode(self, indent=4))
-        
+
     def restart(self) -> None:
         self._latest_game = 0
         self.chat_users = {}
         self.user_data = {}
         self.save_json()
-        
+
     def set_latest_game(self, latest_game: int) -> None:
         self._latest_game = latest_game
         self.save_json()

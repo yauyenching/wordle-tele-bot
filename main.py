@@ -6,33 +6,44 @@ from telebot import types
 from decouple import config
 from flask import Flask, request
 from bot.global_db_handler import GlobalDB
+from utils.messages import START_TEXT, HELP_TEXT
 
 API_KEY = config('API_KEY')
 ADMIN_ID = int(config('ADMIN_ID'))
 bot = telebot.TeleBot(API_KEY)
+bot.set_my_commands([
+    telebot.types.BotCommand("/stats", "show your stats"),
+    telebot.types.BotCommand("/leaderboard", "show chat leaderboard"),
+    telebot.types.BotCommand("/clear", "clear your data"),
+    telebot.types.BotCommand("/name", "change display name"),
+    telebot.types.BotCommand("/games", "change total games"),
+    telebot.types.BotCommand("/streak", "change running streak"),
+    telebot.types.BotCommand("/average", "change score average"),
+    telebot.types.BotCommand("/adjust", "calculate score average with old data"),
+    telebot.types.BotCommand("/help", "show help message"),
+])
+
 server = Flask(__name__)
 
 score_db = GlobalDB.load()
-# score_db.pprint()
 
 # --------------------------------------------------------------USER FUNCTIONS
 
 
-@bot.message_handler(commands=['greet'])
-def test(message):
-    bot.send_message(message.chat.id, f"hello @{message.from_user.username}")
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.send_message(message.chat.id, START_TEXT)
+
+
+@bot.message_handler(commands=['help'])
+def send_help(message):
+    bot.send_message(message.chat.id, HELP_TEXT, parse_mode="MarkdownV2")
 
 
 @bot.message_handler(regexp='^Wordle\s(?P<edition>\d+)\s(?P<tries>[0-6X])/6\n{2}(?:(?:[🟨🟩⬛️⬜️]+)(?:\r?\n)){1,6}')
 def add_score(message):
     """ Update user's data when message matches Wordle Score share regex pattern """
-    score_db.add_score(
-        chat_id=message.chat.id,
-        user_id=message.from_user.id,
-        message=message.text,
-        username=message.from_user.first_name,
-        tele_name=message.from_user.username,
-        bot=bot)
+    score_db.add_score(message=message, bot=bot)
 
 
 @bot.message_handler(commands=['stats', 'leaderboard'])
@@ -50,15 +61,15 @@ def print_scores(message):
 @ bot.message_handler(commands=['clear'])
 def clear(message):
     """ Clear database upon command """
-    warning_text = f"Are you sure you want to delete your data, @{message.from_user.username}?\n\n⚠ *WARNING:*\n This will cause you to *permanently* lose your data\!"
+    warning_text = f"Are you sure you want to delete your data?\n\n⚠ *WARNING:*\n This will cause you to *permanently* lose your data\!"
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(types.InlineKeyboardButton(
         text='Yes', callback_data=message.from_user.id),
         types.InlineKeyboardButton(text='Cancel', callback_data='no'))
-    bot.send_message(message.chat.id,
-                     warning_text,
-                     reply_markup=markup,
-                     parse_mode="MarkdownV2")
+    bot.reply_to(message,
+                 warning_text,
+                 reply_markup=markup,
+                 parse_mode="MarkdownV2")
 
 
 @ bot.callback_query_handler(func=lambda call: True)
@@ -79,19 +90,26 @@ def handle_query(call):
 @ bot.message_handler(commands=['name', 'games', 'streak', 'average'])
 def manual_set(message):
     """ Allow user to manually set data """
-    command, input, *_ = message.text.split()
-    msg = score_db.update_data(
-        message.chat.id, message.from_user.id, message.from_user.username, input, command[1:])
-    bot.send_message(message.chat.id, msg, parse_mode="MarkdownV2")
+    try:
+        command, input, *_ = message.text.split(None, 1)
+        msg = score_db.update_data(
+            message.chat.id, message.from_user.id, input, command[1:])
+        bot.reply_to(message, msg, parse_mode="MarkdownV2")
+    except ValueError:
+        command, *_ = message.text.split()
+        bot.reply_to(message, f"Expected a value after {command}!")
 
 
 @ bot.message_handler(commands=['adjust'])
 def cumulative_set(message):
     """ Allow user to cumulatively adjust data """
-    command, old_num_games, old_avg, *_ = message.text.split()
-    msg = score_db.update_data(
-        message.chat.id, message.from_user.id, message.from_user.username, old_num_games, command[1:], old_avg)
-    bot.send_message(message.chat.id, msg, parse_mode="MarkdownV2")
+    try:
+        command, old_avg, old_num_games, *_ = message.text.split(None, 2)
+        msg = score_db.update_data(
+            message.chat.id, message.from_user.id, old_num_games, command[1:], old_avg)
+        bot.reply_to(message, msg, parse_mode="MarkdownV2")
+    except ValueError:
+        bot.reply_to(message, f"Expected two values after /adjust! e.g. /adjust 4.5 20. See /help for example explanation.")
 
 # --------------------------------------------------------------DEBUG FUNCTIONS
 
@@ -102,8 +120,8 @@ def manual_score(message):
     id = message.from_user.id
     _, user_id, user_name, message_text = message.text.split(None, 3)
     if id == ADMIN_ID and user_id != 0:
-        score_db.add_score(message.chat.id, int(user_id),
-                           message_text, user_name, user_name, bot)
+        score_db.add_score(message, bot, True, int(
+            user_id), user_name, message_text)
 
 
 @ bot.message_handler(commands=['restart'])
@@ -112,8 +130,8 @@ def restart(message):
     id = message.from_user.id
     if id == ADMIN_ID:
         score_db.restart()
-        
-        
+
+
 @ bot.message_handler(commands=['admingame'])
 def restart(message):
     """ Allow admin to manually set latest game """

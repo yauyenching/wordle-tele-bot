@@ -1,10 +1,10 @@
 from utils.messages import user_stats
 
 class WordleStats:
-  def __init__(self, username, edition, tries):
+  def __init__(self, username, edition, tries, last_active_chat):
     """Class storing Wordle score data aggregates.
 
-    Parameters
+    Attributes
     ----------
     username: str
       Telegram user first name
@@ -16,12 +16,15 @@ class WordleStats:
       Total average score
     last_game: int
       Last Wordle edition played
+    last_active_game: int
+      Last active chat
     """
     self._username: str = username   # updated manually ONLY
     self._num_games: int = 1         # updated with score message or manually
     self._streak: int = 1            # updated with score message or manually
     self._score_avg: float = tries   # updated with score message or manually
     self._last_game: int = edition   # updated with score message ONLY
+    self.last_active_chat: int = last_active_chat
   
   #--------------------------------------------------GETTERS
   @property
@@ -72,9 +75,11 @@ class WordleStats:
       self._last_game = last_game
 
   #--------------------------------------------------METHODS
-  def update_stats(self, edition: int, tries: int) -> bool:
+  def update_stats(self, edition: int, tries: int, chat_id: int) -> tuple[bool, bool]:
+    last_active_chat = self.last_active_chat
+    self.last_active_chat = chat_id
     if edition == self.last_game:
-      return False
+      return (False, chat_id == last_active_chat)
     elif edition >= self.last_game:
       if edition == self.last_game + 1:
         # consecutive day
@@ -86,7 +91,7 @@ class WordleStats:
     self.num_games += 1
     self.score_avg = (self.score_avg * (self.num_games - 1) +
                       tries)/self.num_games
-    return True
+    return (True, None)
     
   def update_streak(self, chat_latest_game: int) -> bool:
     if self.last_game <= chat_latest_game - 2:

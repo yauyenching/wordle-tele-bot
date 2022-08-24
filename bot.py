@@ -158,6 +158,7 @@ def get_updates():
 
 @server.route("/")
 def webhook():
+    bot.remove_webhook()
     bot.set_webhook(url=f'https://wordle-scoreboard-bot-yyc.herokuapp.com/{API_KEY}')
     return "!", 200
     

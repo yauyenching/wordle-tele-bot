@@ -5,4 +5,4 @@ __pycache__/
 .env
 
 # Ignore all database files
-*.json
+# *.json

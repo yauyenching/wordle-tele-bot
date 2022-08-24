@@ -3,7 +3,7 @@ import os
 from telebot import types
 from decouple import config
 from flask import Flask, request
-from bot.global_db_handler import GlobalDB
+from handlers.global_db_handler import GlobalDB
 from utils.messages import START_TEXT, HELP_TEXT
 
 API_KEY = config('API_KEY')

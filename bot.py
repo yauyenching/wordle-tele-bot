@@ -1,7 +1,5 @@
-from ast import Global
 import telebot
 import os
-import json
 from telebot import types
 from decouple import config
 from flask import Flask, request
@@ -19,7 +17,8 @@ bot.set_my_commands([
     telebot.types.BotCommand("/games", "change total games"),
     telebot.types.BotCommand("/streak", "change running streak"),
     telebot.types.BotCommand("/average", "change score average"),
-    telebot.types.BotCommand("/adjust", "calculate score average with old data"),
+    telebot.types.BotCommand(
+        "/adjust", "calculate score average with old data"),
     telebot.types.BotCommand("/help", "show help message"),
 ])
 
@@ -109,7 +108,8 @@ def cumulative_set(message):
             message.chat.id, message.from_user.id, old_num_games, command[1:], old_avg)
         bot.reply_to(message, msg, parse_mode="MarkdownV2")
     except ValueError:
-        bot.reply_to(message, f"Expected two values after /adjust! e.g. /adjust 4.5 20. See /help for example explanation.")
+        bot.reply_to(
+            message, f"Expected two values after /adjust! e.g. /adjust 4.5 20. See /help for example explanation.")
 
 # --------------------------------------------------------------DEBUG FUNCTIONS
 
@@ -141,4 +141,17 @@ def restart(message):
         score_db.set_latest_game(int(latest_game))
 
 
-bot.infinity_polling()
+@server.route(f'/{API_KEY}', methods=['POST'])
+def get_updates():
+    # retrieve the message in JSON and then transform it to Telegram object
+    bot.process_new_updates(
+        [telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+
+@server.route("/")
+def webhook():
+    url = 'https://wordle-scoreboard-bot-yyc.herokuapp.com/'
+    bot.remove_webhook()
+    bot.set_webhook(url=f'{url}/{API_KEY}')
+    
+if __name__ == "__main__":
+    server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8455)))

@@ -1,6 +1,4 @@
-import re
 import os
-import pipe
 import jsonpickle
 from typing import Any
 from telebot import TeleBot, types

@@ -72,9 +72,9 @@ class WordleStats:
       self._last_game = last_game
 
   #--------------------------------------------------METHODS
-  def update_stats(self, edition: int, tries: int) -> str | None:
+  def update_stats(self, edition: int, tries: int) -> bool:
     if edition == self.last_game:
-      return f"Today's Wordle has already been computed into your average, {self.username}!"
+      return False
     elif edition >= self.last_game:
       if edition == self.last_game + 1:
         # consecutive day
@@ -86,9 +86,10 @@ class WordleStats:
     self.num_games += 1
     self.score_avg = (self.score_avg * (self.num_games - 1) +
                       tries)/self.num_games
+    return True
     
   def update_streak(self, chat_latest_game: int) -> bool:
-    if self.last_game < chat_latest_game:
+    if self.last_game <= chat_latest_game - 2:
       self.streak = 0
       return True
     else:

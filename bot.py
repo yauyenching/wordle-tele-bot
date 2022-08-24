@@ -27,7 +27,9 @@ server = Flask(__name__)
 score_db = GlobalDB.load()
 
 # --------------------------------------------------------------USER FUNCTIONS
-
+@bot.message_handler(commands=['greet'])
+def greet(message):
+    bot.send_message(message.chat.id, "sup")
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -96,7 +98,13 @@ def manual_set(message):
         bot.reply_to(message, msg, parse_mode="MarkdownV2")
     except ValueError:
         command, *_ = message.text.split()
-        bot.reply_to(message, f"Expected a value after {command}!")
+        if command == '/streak' or command == '/games':
+            value_type = "whole number"
+        elif command == '/average':
+            value_type = "numerical"
+        else:
+            value_type = ""
+        bot.reply_to(message, f"Expected a {value_type} value after {command}!")
 
 
 @ bot.message_handler(commands=['adjust'])
@@ -109,7 +117,7 @@ def cumulative_set(message):
         bot.reply_to(message, msg, parse_mode="MarkdownV2")
     except ValueError:
         bot.reply_to(
-            message, f"Expected two values after /adjust! e.g. /adjust 4.5 20. See /help for example explanation.")
+            message, f"Expected two numerical values after /adjust! e.g. /adjust 4.5 20. See /help for example explanation.")
 
 # --------------------------------------------------------------DEBUG FUNCTIONS
 
@@ -150,7 +158,6 @@ def get_updates():
 
 @server.route("/")
 def webhook():
-    bot.remove_webhook()
     bot.set_webhook(url=f'https://wordle-scoreboard-bot-yyc.herokuapp.com/{API_KEY}')
     return "!", 200
     

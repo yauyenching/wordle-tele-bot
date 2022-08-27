@@ -29,7 +29,7 @@ score_db = GlobalDB.load()
 # --------------------------------------------------------------USER FUNCTIONS
 @bot.message_handler(commands=['greet'])
 def greet(message):
-    bot.send_message(message.chat.id, "sup")
+    bot.send_message(message.chat.id, "sup hello")
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -51,6 +51,7 @@ def add_score(message):
 def print_scores(message):
     """ Print user's stats or chat's leaderboard upon command """
     command = message.text
+    
     if command == '/stats':
         bot.send_message(message.chat.id, score_db.print_scores(
             message.chat.id, message.from_user.id), parse_mode="MarkdownV2")
@@ -149,18 +150,21 @@ def restart(message):
         score_db.set_latest_game(int(latest_game))
 
 
-@server.route(f'/{API_KEY}', methods=['POST'])
-def get_updates():
-    # retrieve the message in JSON and then transform it to Telegram object
-    bot.process_new_updates(
-        [telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
-    return "!", 200
+# @server.route(f'/{API_KEY}', methods=['POST'])
+# def get_updates():
+#     # retrieve the message in JSON and then transform it to Telegram object
+#     bot.process_new_updates(
+#         [telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+#     return "!", 200
 
-@server.route("/")
-def webhook():
-    bot.remove_webhook()
-    bot.set_webhook(url=f'https://wordle-scoreboard-bot-yyc.herokuapp.com/{API_KEY}')
-    return "!", 200
+# @server.route("/")
+# def webhook():
+#     bot.remove_webhook()
+#     bot.set_webhook(url=f'https://wordle-scoreboard-bot-yyc.herokuapp.com/{API_KEY}')
+#     return "!", 200
     
 if __name__ == "__main__":
-    server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8443)))
+#     server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8443)))
+    # Get the database
+    bot.remove_webhook()
+    bot.infinity_polling()

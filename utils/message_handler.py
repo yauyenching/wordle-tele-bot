@@ -12,3 +12,10 @@ def extract_score(message: str) -> tuple[int, float]:
         tries = float(tries)
         
     return (edition, tries)
+
+def extract_command(command:str):
+    """ Use regex to extract command """
+    cmd = re.search('\/(.*?)@*\w*', command)
+    res = cmd.group(0)[1:]
+    print(res)
+    return res

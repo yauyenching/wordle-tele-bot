@@ -3,8 +3,11 @@ import os
 from telebot import types
 from decouple import config
 from flask import Flask, request
+from classes.WordleStats import WordleStats
+from handlers.mongo_db_handler import get_database
 from handlers.global_db_handler import GlobalDB
-from utils.messages import START_TEXT, HELP_TEXT
+from utils.messages import START_TEXT, HELP_TEXT, NO_DATA_MSG, INVALID_AVG
+from utils.message_handler import extract_command, extract_score
 
 API_KEY = config('API_KEY')
 ADMIN_ID = int(config('ADMIN_ID'))
@@ -24,12 +27,15 @@ bot.set_my_commands([
 
 server = Flask(__name__)
 
-score_db = GlobalDB.load()
+score_db = GlobalDB(get_database())
 
 # --------------------------------------------------------------USER FUNCTIONS
+
+
 @bot.message_handler(commands=['greet'])
 def greet(message):
     bot.send_message(message.chat.id, "sup hello")
+
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -50,14 +56,18 @@ def add_score(message):
 @bot.message_handler(commands=['stats', 'leaderboard'])
 def print_scores(message):
     """ Print user's stats or chat's leaderboard upon command """
-    command = message.text
-    
-    if command == '/stats':
-        bot.send_message(message.chat.id, score_db.print_scores(
-            message.chat.id, message.from_user.id), parse_mode="MarkdownV2")
-    else:
-        bot.send_message(message.chat.id, score_db.print_scores(
-            message.chat.id), parse_mode="MarkdownV2")
+    try:
+        command = message.text
+        command = extract_command(command)
+        err_msg = "your stats" if command == 'stats' else "the chat's leaderboard"
+
+        res = score_db.print_scores(
+            chat_id=message.chat.id, user_id=message.from_user.id, cmd=command)
+        bot.send_message(message.chat.id, res, parse_mode="MarkdownV2")
+    except WordleStats.UserNotFound:
+        no_update_msg = NO_DATA_MSG + \
+            f" After being added, you will then be able to print {err_msg}."
+        bot.reply_to(message, no_update_msg)
 
 
 @ bot.message_handler(commands=['clear'])
@@ -76,36 +86,66 @@ def clear(message):
 
 @ bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
-    if call.data == 'no':
-        bot.send_message(call.message.chat.id, "Clear aborted.")
-    else:
-        user_id = int(call.data)
-        bot.send_message(call.message.chat.id, score_db.clear_data(user_id))
-
-    bot.answer_callback_query(callback_query_id=call.id)
-    bot.edit_message_reply_markup(inline_message_id=call.inline_message_id,
-                                  message_id=call.message.message_id,
-                                  chat_id=call.message.chat.id,
-                                  reply_markup=types.InlineKeyboardMarkup())
+    remove_markup = bot.edit_message_reply_markup(inline_message_id=call.inline_message_id,
+                                                  message_id=call.message.message_id,
+                                                  chat_id=call.message.chat.id,
+                                                  reply_markup=types.InlineKeyboardMarkup())
+    try:
+        if call.data == 'no':
+            bot.send_message(call.message.chat.id, "Clear aborted.")
+            remove_markup
+        else:
+            # print(call.from_user.id)
+            user_id = int(call.data)
+            # print(user_id)
+            if user_id == call.from_user.id:
+                score_db.clear_data(user_id)
+                bot.send_message(call.message.chat.id,
+                                 "Cleared user database.")
+                remove_markup
+    except WordleStats.UserNotFound:
+        username = call.from_user.username
+        name = call.from_user.first_name if username == None else "@" + username
+        bot.send_message(
+            call.message.chat.id,
+            f"You have no data stored to clear, {name}! Share your Wordle results to add yourself to the database.")
+        remove_markup
+    finally:
+        bot.answer_callback_query(callback_query_id=call.id)
 
 
 @ bot.message_handler(commands=['name', 'games', 'streak', 'average'])
 def manual_set(message):
     """ Allow user to manually set data """
+    msg = message.text.split(None, 1)
+    command = extract_command(msg[0])
+
     try:
-        command, input, *_ = message.text.split(None, 1)
-        msg = score_db.update_data(
-            message.chat.id, message.from_user.id, input, command[1:])
+        input = msg[1]
+        score_db.update_data(
+            chat_id=message.chat.id,
+            user_id=message.from_user.id,
+            input=input,
+            command=command
+        )
+        msg = f"Successfully updated your {command} to *{input}*\!" if command != 'average' else f"Successfully updated your {command} to *{float(input):.3f}*\!"
+        msg = msg.replace(".", "\.")
         bot.reply_to(message, msg, parse_mode="MarkdownV2")
-    except ValueError:
-        command, *_ = message.text.split()
-        if command == '/streak' or command == '/games':
+    except WordleStats.InvalidAvg:
+        bot.reply_to(message, INVALID_AVG)
+    except WordleStats.UserNotFound:
+        no_update_msg = NO_DATA_MSG + \
+            " After being added, you will then be able to update your user data."
+        bot.reply_to(message, no_update_msg)
+    except (ValueError, IndexError):
+        if command == 'streak' or command == 'games':
             value_type = "whole number"
-        elif command == '/average':
+        elif command == 'average':
             value_type = "numerical"
         else:
             value_type = ""
-        bot.reply_to(message, f"Expected a {value_type} value after {command}!")
+        bot.reply_to(
+            message, f"Expected a single {value_type} value after {command}!")
 
 
 @ bot.message_handler(commands=['adjust'])
@@ -113,9 +153,23 @@ def cumulative_set(message):
     """ Allow user to cumulatively adjust data """
     try:
         command, old_avg, old_num_games, *_ = message.text.split(None, 2)
-        msg = score_db.update_data(
-            message.chat.id, message.from_user.id, old_num_games, command[1:], old_avg)
+        command = extract_command(command)
+        score_db.update_data(
+            chat_id=message.chat.id,
+            user_id=message.from_user.id,
+            input=old_num_games,
+            command=command,
+            input_avg=old_avg
+        )
+        msg = f"Successfully updated your {command} to *{float(input):.3f}*\!".replace(
+            ".", "\.")
         bot.reply_to(message, msg, parse_mode="MarkdownV2")
+    except WordleStats.InvalidAvg:
+        bot.reply_to(message, INVALID_AVG)
+    except WordleStats.UserNotFound:
+        no_update_msg = NO_DATA_MSG + \
+            " After being added, you will then be able to update your user data."
+        bot.reply_to(message, no_update_msg)
     except ValueError:
         bot.reply_to(
             message, f"Expected two numerical values after /adjust! e.g. /adjust 4.5 20. See /help for example explanation.")
@@ -131,14 +185,6 @@ def manual_score(message):
     if id == ADMIN_ID and user_id != 0:
         score_db.add_score(message, bot, True, int(
             user_id), user_name, message_text)
-
-
-@ bot.message_handler(commands=['restart'])
-def restart(message):
-    """ Allow admin to restart score_db """
-    id = message.from_user.id
-    if id == ADMIN_ID:
-        score_db.restart()
 
 
 @ bot.message_handler(commands=['admingame'])
@@ -162,9 +208,9 @@ def restart(message):
 #     bot.remove_webhook()
 #     bot.set_webhook(url=f'https://wordle-scoreboard-bot-yyc.herokuapp.com/{API_KEY}')
 #     return "!", 200
-    
+
 if __name__ == "__main__":
-#     server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8443)))
+    #     server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8443)))
     # Get the database
     bot.remove_webhook()
     bot.infinity_polling()

@@ -30,6 +30,9 @@ HELP_TEXT = ("I keep track of your Wordle stats by automatically calculating you
              "\n"
              "Created with love by @yyenching")
 
+NO_DATA_MSG = "No data recorded yet! Share your Wordle results to add yourself to the database."
+
+INVALID_AVG = "Wordle score average cannot be above a value of 7.0!"
 
 def user_stats(username: str, num_games: int, streak: int, score_avg: float) -> str:
     return (

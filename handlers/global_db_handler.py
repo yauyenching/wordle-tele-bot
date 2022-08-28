@@ -5,9 +5,7 @@ from telebot import TeleBot, types
 from utils.messages import added_text
 from classes.WordleStats import WordleStats
 from utils.message_handler import extract_score
-from handlers.mongo_db_handler import get_database
-
-NO_DATA_MSG = "No data recorded yet\! Share Wordle results to add yourself to the database\."
+from pymongo import collection
 
 
 class GlobalDB:
@@ -24,8 +22,7 @@ class GlobalDB:
         Dictionary with user id as key and user data as value
     """
 
-    def __init__(self) -> None:
-        db = get_database()
+    def __init__(self, db: collection.Collection) -> None:
         self._latest_game = db["latest_game"]
         self.global_data = WordleStats(db["user_data"])
 
@@ -69,98 +66,24 @@ class GlobalDB:
                          f"Today's Wordle has already been computed into your average\!",
                          parse_mode="MarkdownV2")
 
-    def print_scores(self, chat_id: int, user_id: int = 0) -> str:
+    def print_scores(self, chat_id: int, user_id: int, cmd: str) -> str:
         """ Send pretty printed requested stats """
-        try:
-            cmd_msg = "your stats" if user_id else "the chat's leaderboard"
-            no_update_msg = NO_DATA_MSG + \
-                f" After being added, you will then be able to print {cmd_msg}\."
+        # print(cmd)
+        print_func = self.global_data.print_stats if cmd=='stats' else self.global_data.print_leaderboard
 
-            print_func = self.global_data.print_stats if user_id else self.global_data.print_leaderboard
+        return print_func(user_id=user_id, chat_id=chat_id, chat_latest_game=self.latest_game)
 
-            return print_func(user_id=user_id, chat_id=chat_id, chat_latest_game=self.latest_game)
-        except self.global_data.UserNotFound:
-            return no_update_msg
+    def update_data(self, chat_id: int, user_id: int, input: Any, command: str, input_avg: Any = 0) -> None:
+        self.global_data.manual_update(
+            user_id=user_id,
+            chat_id=chat_id,
+            cmd=command,
+            input=input,
+            input_avg=input_avg
+        )
 
-    def update_data(self, chat_id: int, user_id: int, input: Any, command: str, input_avg: Any = 0) -> str:
-        no_update_msg = NO_DATA_MSG + \
-            " After being added, you will then be able to update your user data\."
-
-        user_data = self.get_user_data(user_id)
-
-        res = f"Successfully updated your {command} to *{input}*\!".replace(
-            ".", "\.") if command != 'average' else f"Successfully updated your {command} to *{float(input):.3f}*\!".replace(
-                ".", "\.")
-
-        # if user_data == None:
-        #     return no_update_msg
-        # elif command == 'name':
-        #     user_data.username = input
-        # elif command == 'games':
-        #     user_data.num_games = input
-        # elif command == 'streak':
-        #     user_data.streak = input
-        # elif command == 'average':
-        #     user_data.score_avg = input
-        #     new_avg = float(input)
-        #     res = f"Successfully updated your {command} to *{new_avg:.3f}*\!".replace(
-        #         ".", "\.")
-        #     if float(input) > 7.0:
-        #         return "Sorry, you can only update your score average to have a max value of *7\.0*\!"
-        # else:
-        #     old_games = int(input)
-        #     old_avg = float(input_avg)
-        #     score_avg = user_data.score_avg
-        #     num_games = user_data.num_games
-
-        #     new_games = num_games + old_games
-        #     new_avg = ((old_avg * old_games) +
-        #                (score_avg * num_games)) / new_games
-
-        #     user_data.num_games = new_games
-        #     user_data.score_avg = new_avg
-
-        #     res = f"Successfully updated your games and average to *{new_games}* and *{new_avg:.3f}*\!".replace(
-        #         ".", "\.")
-
-        # self.save_json()
-        # return res
-
-    def clear_data(self, user_id: int) -> str:
-        user_data = self.get_user_data(user_id)
-        no_data_msg = "No user data to clear!"
-
-        user_data = self.get_user_data(user_id)
-
-        if user_data == None:
-            return no_data_msg
-        else:
-            _ = self.user_data.pop(user_id)
-            self.save_json()
-            return "Cleared user database."
-
-    def save_json(self, filename: str = "database.json") -> None:
-        """ Save score in local .json file for persistence data storage """
-        f = open(filename, "w+", encoding="utf-8")
-        f.write(jsonpickle.encode(self, indent=4, keys=True))
-        f.close()
-
-    def load(filename: str = "database.json"):
-        if os.path.exists(filename):
-            f = open(filename)
-            return jsonpickle.decode(f.read(), keys=True)
-        else:
-            return GlobalDB()
-
-    def pprint(self) -> None:
-        print(jsonpickle.encode(self, indent=4))
-
-    def restart(self) -> None:
-        self._latest_game = 0
-        self.chat_users = {}
-        self.user_data = {}
-        self.save_json()
+    def clear_data(self, user_id: int) -> None:
+        self.global_data.clear(user_id)
 
     def set_latest_game(self, latest_game: int) -> None:
-        self._latest_game = latest_game
-        self.save_json()
+        self.latest_game = latest_game

@@ -69,12 +69,12 @@ class GlobalDB:
     def print_scores(self, chat_id: int, user_id: int, cmd: str) -> str:
         """ Send pretty printed requested stats """
         # print(cmd)
-        print_func = self.global_data.print_stats if cmd=='stats' else self.global_data.print_leaderboard
+        print_func = self.global_data.print_stats if cmd == 'stats' else self.global_data.print_leaderboard
 
         return print_func(user_id=user_id, chat_id=chat_id, chat_latest_game=self.latest_game)
 
-    def update_data(self, chat_id: int, user_id: int, input: Any, command: str, input_avg: Any = 0) -> None:
-        self.global_data.manual_update(
+    def update_data(self, chat_id: int, user_id: int, input: Any, command: str, input_avg: Any = 0) -> None | tuple[int, float]:
+        return self.global_data.manual_update(
             user_id=user_id,
             chat_id=chat_id,
             cmd=command,
@@ -84,6 +84,18 @@ class GlobalDB:
 
     def clear_data(self, user_id: int) -> None:
         self.global_data.clear(user_id)
+        
+    def toggle_retroactive(self, user_id: int) -> bool:
+        return self.global_data.toggle_retroactive(user_id)
+        
+    # --------------------------------------------------ADMIN METHODS
+    
+    def get_latest_game(self) -> str:
+        return str(self.latest_game)
 
     def set_latest_game(self, latest_game: int) -> None:
-        self.latest_game = latest_game
+        self._latest_game.replace_one({"_id": 0},
+                                      {"latest_game": latest_game})
+        
+    def clear_debug(self, admin_id: int) -> None:
+        self.global_data.db.delete_many({"member_of_chats": admin_id, "_id": {"$ne": admin_id}})

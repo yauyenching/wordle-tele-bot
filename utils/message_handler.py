@@ -16,6 +16,4 @@ def extract_score(message: str) -> tuple[int, float]:
 def extract_command(command:str):
     """ Use regex to extract command """
     cmd = re.search('\/(.*?)@*\w*', command)
-    res = cmd.group(0)[1:]
-    print(res)
-    return res
+    return cmd.group(0)[1:]

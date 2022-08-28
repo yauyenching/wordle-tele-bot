@@ -7,7 +7,7 @@ from classes.WordleStats import WordleStats
 from handlers.mongo_db_handler import get_database
 from handlers.global_db_handler import GlobalDB
 from utils.messages import START_TEXT, HELP_TEXT, NO_DATA_MSG, INVALID_AVG
-from utils.message_handler import extract_command, extract_score
+from utils.message_handler import extract_command
 
 API_KEY = config('API_KEY')
 ADMIN_ID = int(config('ADMIN_ID'))
@@ -22,6 +22,7 @@ bot.set_my_commands([
     telebot.types.BotCommand("/average", "change score average"),
     telebot.types.BotCommand(
         "/adjust", "calculate score average with old data"),
+    telebot.types.BotCommand("/toggleretroactive", "toggle retroactive stats updates for older games"),
     telebot.types.BotCommand("/help", "show help message"),
 ])
 
@@ -139,13 +140,13 @@ def manual_set(message):
         bot.reply_to(message, no_update_msg)
     except (ValueError, IndexError):
         if command == 'streak' or command == 'games':
-            value_type = "whole number"
+            value_type = "whole number "
         elif command == 'average':
-            value_type = "numerical"
+            value_type = "numerical "
         else:
             value_type = ""
         bot.reply_to(
-            message, f"Expected a single {value_type} value after {command}!")
+            message, f"Expected a single {value_type}value after /{command}!")
 
 
 @ bot.message_handler(commands=['adjust'])
@@ -154,14 +155,14 @@ def cumulative_set(message):
     try:
         command, old_avg, old_num_games, *_ = message.text.split(None, 2)
         command = extract_command(command)
-        score_db.update_data(
+        new_games, new_avg = score_db.update_data(
             chat_id=message.chat.id,
             user_id=message.from_user.id,
             input=old_num_games,
             command=command,
             input_avg=old_avg
         )
-        msg = f"Successfully updated your {command} to *{float(input):.3f}*\!".replace(
+        msg = f"Successfully updated your games and average to *{new_games}* and *{new_avg:.3f}*\!".replace(
             ".", "\.")
         bot.reply_to(message, msg, parse_mode="MarkdownV2")
     except WordleStats.InvalidAvg:
@@ -172,12 +173,23 @@ def cumulative_set(message):
         bot.reply_to(message, no_update_msg)
     except ValueError:
         bot.reply_to(
-            message, f"Expected two numerical values after /adjust! e.g. /adjust 4.5 20. See /help for example explanation.")
+            message, f"Expected two numerical values after /adjust! e.g. /adjust 4.5 20. See /help for explanation of the example.")
+
+
+@ bot.message_handler(commands=['toggleretroactive'])
+def toggle_retroactive(message):
+    toggle_state = score_db.toggle_retroactive(message.from_user.id)
+    if toggle_state:
+        msg = "You are now able to have Wordle results for older games update your stats \(except streak\)\."
+    else:
+        msg = "Sharing Wordle results for older games will not factor into your stats\."
+    bot.reply_to(
+        message, f"Retroactive updates for you is now set to *{toggle_state}*\. {msg}", parse_mode="MarkdownV2")
 
 # --------------------------------------------------------------DEBUG FUNCTIONS
 
 
-@ bot.message_handler(commands=['adduser'])
+@ bot.message_handler(commands=['adminuser'])
 def manual_score(message):
     """ Allow admin to add test user so as to test bot in Telegram """
     id = message.from_user.id
@@ -194,6 +206,27 @@ def restart(message):
     _, latest_game, *_ = message.text.split()
     if id == ADMIN_ID:
         score_db.set_latest_game(int(latest_game))
+        bot.reply_to(
+            message, "Successfuly updated global latest game variable!")
+
+
+@ bot.message_handler(commands=['adminclear'])
+def restart(message):
+    """ Allow admin to clear debug users """
+    id = message.from_user.id
+    if id == ADMIN_ID:
+        score_db.clear_debug(ADMIN_ID)
+        bot.reply_to(
+            message, "Successfuly cleared debug chat database!")
+
+
+@ bot.message_handler(commands=['admincheck'])
+def restart(message):
+    """ Allow admin to clear debug users """
+    id = message.from_user.id
+    if id == ADMIN_ID:
+        bot.reply_to(
+            message, f"Latest game in the database is *{score_db.get_latest_game()}*\!", parse_mode="MarkdownV2")
 
 
 # @server.route(f'/{API_KEY}', methods=['POST'])

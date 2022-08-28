@@ -24,9 +24,12 @@ HELP_TEXT = ("I keep track of your Wordle stats by automatically calculating you
              "/average \- change your score average\n"
              "/adjust \- calculate your score average using your old score average\n"
              "\n"
-             "*Examples*\n"
-             "/average 4\.5 \(to change your average to 4\.5\)\n"
-             "/adjust 4\.5 20 \(to calculate your new score average using your old average of 4\.5 that was calculated over 20 games\)\n"
+             "*Settings*\n"
+             "/toggleretroactive \- control whether sharing older Wordle results can update your results \(toggled OFF by default\)\n"
+             "\n"
+             "Examples for changing your data:\n"
+             "\- /average 4\.5 \(to change your average to 4\.5\)\n"
+             "\- /adjust 4\.5 20 \(to calculate your new score average using your old average of 4\.5 that was calculated over 20 games\)\n"
              "\n"
              "Created with love by @yyenching")
 

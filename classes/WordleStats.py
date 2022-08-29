@@ -49,11 +49,12 @@ class WordleStats:
         pass
 
     # --------------------------------------------------USER METHODS
-    def toggle_retroactive(self, user_id: int) -> bool:
-        old_state = self.db.find_one({"_id": user_id})['toggle_retroactive']
+    def toggle(self, user_id: int, retroactive: bool = True) -> bool:
+        setting = 'toggle_retroactive' if retroactive else 'warning'
+        old_state = self.db.find_one({"_id": user_id})[setting]
         new_state = not old_state
         self.db.update_one({"_id": user_id},
-                           {"$set": {"toggle_retroactive": new_state}})
+                           {"$set": {setting: new_state}})
         return new_state
 
     def get_user_data(self, user_id: int) -> UserData:
@@ -81,7 +82,8 @@ class WordleStats:
             "last_game": edition,
             "last_active_chat": chat_id,
             "member_of_chats": [chat_id],
-            "toggle_retroactive": False
+            "toggle_retroactive": False,
+            "warning": True
         }
         self.db.insert_one(user_data)
 
@@ -127,7 +129,7 @@ class WordleStats:
 
             new_avg = (score_avg * num_games +
                        tries)/(num_games + 1)
-            print(new_avg)
+            # print(new_avg)
             # print(streak_inc)
             # print(streak_reset)
             update = {

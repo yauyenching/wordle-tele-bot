@@ -65,6 +65,11 @@ class GlobalDB:
             bot.reply_to(message,
                          f"Today's Wordle has already been computed into your average\!",
                          parse_mode="MarkdownV2")
+        elif not update_msg and not update:
+            warning_state = self.global_data.db.find_one({"_id": user_id})['warning']
+            if warning_state:
+                bot.reply_to(message,
+                            "/toggleretroactive is OFF so results for older games do not affect your stats! Use /togglewarning to turn off this warning.")
 
     def print_scores(self, chat_id: int, user_id: int, cmd: str) -> str:
         """ Send pretty printed requested stats """
@@ -86,7 +91,10 @@ class GlobalDB:
         self.global_data.clear(user_id)
         
     def toggle_retroactive(self, user_id: int) -> bool:
-        return self.global_data.toggle_retroactive(user_id)
+        return self.global_data.toggle(user_id)
+    
+    def toggle_warning(self, user_id: int) -> bool:
+        return self.global_data.toggle(user_id, False)
         
     # --------------------------------------------------ADMIN METHODS
     

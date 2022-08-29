@@ -186,6 +186,16 @@ def toggle_retroactive(message):
         msg = "Sharing Wordle results for older games will not factor into your stats\."
     bot.reply_to(
         message, f"Retroactive updates for you is now set to *{toggle_state}*\. {msg}", parse_mode="MarkdownV2")
+    
+@ bot.message_handler(commands=['togglewarning'])
+def toggle_retroactive(message):
+    toggle_state = score_db.toggle_warning(message.from_user.id)
+    if toggle_state:
+        msg = "Warnings are turned *on*\. Sharing older games do not affect your stats, and you WILL receive a notification when you do so\."
+    else:
+        msg = "Warnings are now *muted*\. Sharing older games do not affect your stats, and you will NOT receive a notification when you do so\. Use /togglewarning to turn warnings back on\."
+    bot.reply_to(
+        message, msg, parse_mode="MarkdownV2")
 
 # --------------------------------------------------------------DEBUG FUNCTIONS
 

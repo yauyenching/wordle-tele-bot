@@ -30,6 +30,7 @@ HELP_TEXT = ("I keep track of your Wordle stats by automatically calculating you
              "\n"
              "*Settings*\n"
              "/toggleretroactive \- control whether sharing older Wordle results can update your stats \(toggled OFF by default\)\n"
+             "/togglewarning \- control whether sharing older Wordle results with /toggleretroactive off will give you a warning \(toggled ON by default\)\n"
              "\n"
              "Created with love by @yyenching")
 

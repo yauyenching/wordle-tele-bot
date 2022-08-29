@@ -12,8 +12,13 @@ At the height of my Wordle craze, I would manually calculate score averages for 
 
 ## ✨ Preview ##
 <div align="center">
-  <figure><img src="preview/auto_add_and_leaderboard.png" height="450">
-  <img src="preview/auto_update.png" height="450"><figcaption>Examples of printing leaderboard (left) and auto-updating stats (right) capabilities</figcaption></figure>
+  <figure>
+    <div align="center" style="display:block;">
+      <img src="preview/auto_add_and_leaderboard.png" height="600">
+      <img src="preview/auto_update.png" height="600">
+    </div>
+    <figcaption>Examples of printing leaderboard (left) and auto-updating stats (right) capabilities</figcaption>
+  </figure>
   <h3>Check out the live bot on telegram (<a href="https://t.me/WordleScoreboardBot">@WordleScoreboardBot</a>)!</h3>
 </div>
 

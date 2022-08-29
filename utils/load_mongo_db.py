@@ -1,11 +1,11 @@
 from decouple import config
 
-DB_PASS = config('DB_PASS')
+DB_URL = config('MONGODB_CONNECTION')
 def get_database():
     from pymongo import MongoClient
 
     # Provide the mongodb atlas url to connect python to mongodb using pymongo
-    CONNECTION_STRING = f"mongodb+srv://yc:{DB_PASS}@wordle-stats.8cl8bxu.mongodb.net/WordleStats"
+    CONNECTION_STRING = DB_URL
 
     # Create a connection using MongoClient. You can import MongoClient or use pymongo.MongoClient
     client = MongoClient(CONNECTION_STRING)

@@ -19,17 +19,19 @@ class WordleStats:
     Attributes
     ----------
     username: str
-      Telegram user first name
+        Telegram user first name
     num_games: int
-      Total number of games played
+        Total number of games played
     streak: int
-      Current running Wordle streak
+        Current running Wordle streak
     score_avg: float
-      Total average score
+        Total average score
     last_game: int
-      Last Wordle edition played
-    last_active_game: int
-      Last active chat
+        Last Wordle edition played
+    last_active_chat: int
+        Last active chat
+    members_of_chat: list[int]
+        List of chats that user is apart of
     """
 
     def __init__(self, db):
@@ -103,12 +105,13 @@ class WordleStats:
             _, num_games, _, score_avg, last_game, last_active_chat, retroactive_updates = self.get_user_data(
                 user_id)
 
+            last_game_update = {"last_game": edition}
             streak_inc = {"streak": 1}
             streak_reset = {"streak": 1}
             if edition == last_game:
                 self.db.update_one({"_id": user_id,
                                     "last_active_chat": {"$ne": chat_id}},
-                                   {"$set": {"last_active_chat": chat_id}})
+                                   {"$set": {"last_active_chat": chat_id}} | member_of_chat(chat_id))
                 return (False, last_active_chat == chat_id)
             elif edition > last_game:
                 if edition == last_game + 1:
@@ -118,7 +121,7 @@ class WordleStats:
                     # missed a day
                     streak_inc = {}
             else:
-                streak_inc, streak_reset = {}, {}
+                streak_inc, streak_reset, last_game_update = {}, {}, {}
                 if not retroactive_updates:
                     return (False, False)
 
@@ -129,8 +132,7 @@ class WordleStats:
             # print(streak_reset)
             update = {
                 "$inc": {"num_games": 1} | streak_inc,
-                "$set": {"last_game": edition,
-                         "score_avg": new_avg} | streak_reset
+                "$set": {"score_avg": new_avg} | streak_reset | last_game_update
             } | member_of_chat(chat_id)
             self.db.update_one({"_id": user_id}, update)
             return (True, False)

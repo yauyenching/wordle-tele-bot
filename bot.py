@@ -4,7 +4,7 @@ from telebot import types
 from decouple import config
 from flask import Flask, request
 from classes.WordleStats import WordleStats
-from handlers.mongo_db_handler import get_database
+from utils.load_mongo_db import get_database
 from handlers.global_db_handler import GlobalDB
 from utils.messages import START_TEXT, HELP_TEXT, NO_DATA_MSG, INVALID_AVG
 from utils.message_handler import extract_command
@@ -22,7 +22,8 @@ bot.set_my_commands([
     telebot.types.BotCommand("/average", "change score average"),
     telebot.types.BotCommand(
         "/adjust", "calculate score average with old data"),
-    telebot.types.BotCommand("/toggleretroactive", "toggle retroactive stats updates for older games"),
+    telebot.types.BotCommand(
+        "/toggleretroactive", "toggle retroactive stats updates for older games"),
     telebot.types.BotCommand("/help", "show help message"),
 ])
 
@@ -229,21 +230,20 @@ def restart(message):
             message, f"Latest game in the database is *{score_db.get_latest_game()}*\!", parse_mode="MarkdownV2")
 
 
-# @server.route(f'/{API_KEY}', methods=['POST'])
-# def get_updates():
-#     # retrieve the message in JSON and then transform it to Telegram object
-#     bot.process_new_updates(
-#         [telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
-#     return "!", 200
+@server.route(f'/{API_KEY}', methods=['POST'])
+def get_updates():
+    # retrieve the message in JSON and then transform it to Telegram object
+    bot.process_new_updates(
+        [telebot.types.Update.de_json(request.stream.read().decode("utf-8"))])
+    return "!", 200
 
-# @server.route("/")
-# def webhook():
-#     bot.remove_webhook()
-#     bot.set_webhook(url=f'https://wordle-scoreboard-bot-yyc.herokuapp.com/{API_KEY}')
-#     return "!", 200
+@server.route("/")
+def webhook():
+    bot.remove_webhook()
+    bot.set_webhook(
+        url=f'https://wordle-scoreboard-bot-yyc.herokuapp.com/{API_KEY}')
+    return "!", 200
+
 
 if __name__ == "__main__":
-    #     server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8443)))
-    # Get the database
-    bot.remove_webhook()
-    bot.infinity_polling()
+    server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 8443)))

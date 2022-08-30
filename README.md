@@ -19,7 +19,7 @@ At the height of my Wordle craze, I would manually calculate score averages for 
     </div>
     <figcaption>Examples of printing leaderboard (left) and auto-updating stats (right) capabilities</figcaption>
   </figure>
-  <h3>Check out the live bot on telegram (<a href="https://t.me/WordleScoreboardBot">@WordleScoreboardBot</a>)!</h3>
+  <h3>🔗 Check out the live bot on telegram (<a href="https://t.me/WordleScoreboardBot">@WordleScoreboardBot</a>)!</h3>
 </div>
 
 ## ⭐ Features ##

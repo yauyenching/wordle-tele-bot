@@ -16,10 +16,8 @@ class GlobalDB:
     ----------
     latest_game: int
         Latest game globally for streak purposes
-    chat_users: dict[int, list[int]]
-        Dictionary with chat id as key and list of user ids as value
-    user_data: dict[int, WordleStats]
-        Dictionary with user id as key and user data as value
+    global_data: WordleStats
+        Class containing methods to interact with and update database
     """
 
     def __init__(self, db: collection.Collection) -> None:
@@ -42,30 +40,31 @@ class GlobalDB:
     # --------------------------------------------------METHODS
     def add_score(self, message: types.Message, bot: TeleBot, debug: bool = False, id: int = 1, name: str = "", txt: str = "") -> None:
         """ Add Wordle score to user database """
-        chat_id = message.chat.id
-        user_id = message.from_user.id if not debug else id
-        username = message.from_user.first_name if not debug else name
-        text = message.text if not debug else txt
+        try:
+            chat_id = message.chat.id
+            user_id = message.from_user.id if not debug else id
+            username = message.from_user.first_name if not debug else name
+            text = message.text if not debug else txt
 
-        edition, tries = extract_score(text)
-        self.latest_game = edition
+            edition, tries = extract_score(text)
+            self.latest_game = edition
 
-        update, update_msg = self.global_data.update_stats(
-            user_id=user_id,
-            chat_id=chat_id,
-            edition=edition,
-            tries=tries,
-            username=username
-        )
+            update, update_msg = self.global_data.update_stats(
+                user_id=user_id,
+                chat_id=chat_id,
+                edition=edition,
+                tries=tries,
+                username=username
+            )
 
-        if update_msg and update:
-            bot.send_message(chat_id, added_text(
-                username=username, init_score=tries), parse_mode="MarkdownV2")
-        elif update_msg and not update:
-            bot.reply_to(message,
-                         f"Today's Wordle has already been computed into your average\!",
-                         parse_mode="MarkdownV2")
-        elif not update_msg and not update:
+            if update_msg and update:
+                bot.send_message(chat_id, added_text(
+                    username=username, init_score=tries), parse_mode="MarkdownV2")
+            elif update_msg and not update:
+                bot.reply_to(message,
+                            f"Today's Wordle has already been computed into your average\!",
+                            parse_mode="MarkdownV2")
+        except WordleStats.RetroactiveOff:
             warning_state = self.global_data.db.find_one({"_id": user_id})['warning']
             if warning_state:
                 bot.reply_to(message,

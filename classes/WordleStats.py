@@ -32,6 +32,10 @@ class WordleStats:
         Last active chat
     members_of_chat: list[int]
         List of chats that user is apart of
+    toggle_retroactive: bool
+        State of user-allowed retroactive updates
+    toggle_warnings: bool
+        State of warning notifications for attempted retroactive updates
     """
 
     def __init__(self, db):
@@ -40,13 +44,20 @@ class WordleStats:
     UserData = namedtuple(
         'UserData', ['username', 'num_games', 'streak', 'score_avg', 'last_game', 'last_active_chat', 'toggle_retroactive'])
 
-    class InvalidAvg(ValueError):
+    class InvalidAvg(Exception):
         """Raised when the score avg inputted is higher than 7.0"""
         pass
 
-    class UserNotFound(LookupError):
+    class UserNotFound(Exception):
         """Raised when the user is not found in user base"""
         pass
+    
+    class RetroactiveOff(Exception):
+        """
+        Raised when the user tries to update the database with an old Wordle result
+        when toggle_retroactive is turned off
+        """
+        
 
     # --------------------------------------------------USER METHODS
     def toggle(self, user_id: int, retroactive: bool = True) -> bool:
@@ -125,7 +136,7 @@ class WordleStats:
             else:
                 streak_inc, streak_reset, last_game_update = {}, {}, {}
                 if not retroactive_updates:
-                    return (False, False)
+                    raise self.RetroactiveOff
 
             new_avg = (score_avg * num_games +
                        tries)/(num_games + 1)

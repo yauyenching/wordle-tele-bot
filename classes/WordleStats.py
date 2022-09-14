@@ -125,6 +125,8 @@ class WordleStats:
             - update (bool): Whether update has persisted
             - update_msg (bool): Whether to send message (message content dependent on update)
         """
+        while (self.check_lock(user_id)):
+            pass
         try:
             _, num_games, _, score_avg, last_game, last_active_chat, retroactive_updates = self.get_user_data(
                 user_id, write=True)
@@ -133,8 +135,6 @@ class WordleStats:
             streak_inc = {"streak": 1}
             streak_reset = {"streak": 1}
             if edition == last_game:
-                while (self.check_lock(user_id)):
-                    pass
                 self.db.update_one({"_id": user_id,
                                     "last_active_chat": {"$ne": chat_id}},
                                    {"$set": {"last_active_chat": chat_id}} | member_of_chat(chat_id))
@@ -161,8 +161,6 @@ class WordleStats:
                 "$set": {"score_avg": new_avg,
                          "last_active_chat": chat_id} | streak_reset | last_game_update
             } | member_of_chat(chat_id)
-            while (self.check_lock(user_id)):
-                pass
             self.db.update_one({"_id": user_id}, update)
             return (True, False)
         except self.UserNotFound:
@@ -179,6 +177,8 @@ class WordleStats:
                                {"$set": {"lock": False}})
 
     def manual_update(self, user_id: int, chat_id: int, cmd: str, input: Any, input_avg: Any = 0) -> None | tuple[int, float]:
+        while (self.check_lock(user_id)):
+            pass
         try:
             attr_dict = {
                 'name': (str, "username"),
@@ -191,8 +191,6 @@ class WordleStats:
                 if cmd == 'average' and float(input) > 7.0:
                     raise self.InvalidAvg
                 change_type, key = attr_dict[cmd]
-                while (self.check_lock(user_id)):
-                    pass
                 res = self.db.update_one(
                     {"_id": user_id}, {"$set": {key: change_type(input)}} | member_of_chat(chat_id))
             else:
@@ -207,8 +205,6 @@ class WordleStats:
                 new_games = num_games + old_games
                 new_avg = ((old_avg * old_games) +
                            (score_avg * num_games)) / new_games
-                while (self.check_lock(user_id)):
-                    pass
                 res = self.db.update_one(
                     {"_id": user_id},
                     {"$set": {"score_avg": float(new_avg),

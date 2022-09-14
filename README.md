@@ -29,6 +29,7 @@ At the height of my Wordle craze, I would manually calculate score averages for 
 * Allow manual changing/updating of user stats to account for missing information
 * Clear user database upon user request
 * Persistent user data storage through MongoDB
+* [NEW as of v1.0.2] Distributed database logic (MongoDB `"lock"` atrribute with while loop) to mitigate duplicate updates
 
 ## 🛠️ Implementation ##
 This project was coded in Python using [pyTelegramBotAPI](https://github.com/eternnoir/pyTelegramBotAPI), [pymongo](https://github.com/mongodb/mongo-python-driver), and deployed on [Heroku](https://www.heroku.com/).

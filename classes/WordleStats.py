@@ -41,6 +41,9 @@ class WordleStats:
     def __init__(self, db):
         self.db = db
 
+    def check_lock(self, user_id: int) -> bool:
+        return self.db.find_one({"_id": user_id})['lock']
+
     UserData = namedtuple(
         'UserData', ['username', 'num_games', 'streak', 'score_avg', 'last_game', 'last_active_chat', 'toggle_retroactive'])
 
@@ -51,13 +54,12 @@ class WordleStats:
     class UserNotFound(Exception):
         """Raised when the user is not found in user base"""
         pass
-    
+
     class RetroactiveOff(Exception):
         """
         Raised when the user tries to update the database with an old Wordle result
         when toggle_retroactive is turned off
         """
-        
 
     # --------------------------------------------------USER METHODS
     def toggle(self, user_id: int, retroactive: bool = True) -> bool:
@@ -68,8 +70,16 @@ class WordleStats:
                            {"$set": {setting: new_state}})
         return new_state
 
-    def get_user_data(self, user_id: int) -> UserData:
-        user_data = self.db.find_one({"_id": user_id}, {"_id": 0})
+    def get_user_data(self, user_id: int, write: bool) -> UserData:
+        # Used in update_stats and manual_update
+        if write:
+            user_data = self.db.find_one_and_update(
+                {"_id": user_id},
+                {"$set": {"lock": True}},
+                projection={"_id": 0}
+            )
+        else:
+            user_data = self.db.find_one({"_id": user_id}, {"_id": 0})
         if user_data == None:
             raise self.UserNotFound
         else:
@@ -94,7 +104,8 @@ class WordleStats:
             "last_active_chat": chat_id,
             "member_of_chats": [chat_id],
             "toggle_retroactive": False,
-            "warning": True
+            "warning": True,
+            "lock": False
         }
         self.db.insert_one(user_data)
 
@@ -116,12 +127,14 @@ class WordleStats:
         """
         try:
             _, num_games, _, score_avg, last_game, last_active_chat, retroactive_updates = self.get_user_data(
-                user_id)
+                user_id, write=True)
 
             last_game_update = {"last_game": edition}
             streak_inc = {"streak": 1}
             streak_reset = {"streak": 1}
             if edition == last_game:
+                while (self.check_lock(user_id)):
+                    pass
                 self.db.update_one({"_id": user_id,
                                     "last_active_chat": {"$ne": chat_id}},
                                    {"$set": {"last_active_chat": chat_id}} | member_of_chat(chat_id))
@@ -145,8 +158,11 @@ class WordleStats:
             # print(streak_reset)
             update = {
                 "$inc": {"num_games": 1} | streak_inc,
-                "$set": {"score_avg": new_avg} | streak_reset | last_game_update
+                "$set": {"score_avg": new_avg,
+                         "last_active_chat": chat_id} | streak_reset | last_game_update
             } | member_of_chat(chat_id)
+            while (self.check_lock(user_id)):
+                pass
             self.db.update_one({"_id": user_id}, update)
             return (True, False)
         except self.UserNotFound:
@@ -158,49 +174,60 @@ class WordleStats:
                 chat_id=chat_id
             )
             return (True, True)
+        finally:
+            self.db.update_one({"_id": user_id},
+                               {"$set": {"lock": False}})
 
     def manual_update(self, user_id: int, chat_id: int, cmd: str, input: Any, input_avg: Any = 0) -> None | tuple[int, float]:
-        attr_dict = {
-            'name': (str, "username"),
-            'games': (int, "num_games"),
-            'streak': (int, "streak"),
-            'average': (float, "score_avg"),
-        }
+        try:
+            attr_dict = {
+                'name': (str, "username"),
+                'games': (int, "num_games"),
+                'streak': (int, "streak"),
+                'average': (float, "score_avg"),
+            }
 
-        if cmd != 'adjust':
-            if cmd == 'average' and float(input) > 7.0:
-                raise self.InvalidAvg
-            change_type, key = attr_dict[cmd]
-            res = self.db.update_one(
-                {"_id": user_id}, {"$set": {key: change_type(input)}} | member_of_chat(chat_id))
-        else:
-            user_data = self.get_user_data(user_id)
-            score_avg = user_data.score_avg
-            num_games = user_data.num_games
-            old_games = int(input)
-            old_avg = float(input_avg)
-            if old_avg > 7.0:
-                raise self.InvalidAvg
+            if cmd != 'adjust':
+                if cmd == 'average' and float(input) > 7.0:
+                    raise self.InvalidAvg
+                change_type, key = attr_dict[cmd]
+                while (self.check_lock(user_id)):
+                    pass
+                res = self.db.update_one(
+                    {"_id": user_id}, {"$set": {key: change_type(input)}} | member_of_chat(chat_id))
+            else:
+                user_data = self.get_user_data(user_id, write=True)
+                score_avg = user_data.score_avg
+                num_games = user_data.num_games
+                old_games = int(input)
+                old_avg = float(input_avg)
+                if old_avg > 7.0:
+                    raise self.InvalidAvg
 
-            new_games = num_games + old_games
-            new_avg = ((old_avg * old_games) +
-                       (score_avg * num_games)) / new_games
-            res = self.db.update_one(
-                {"_id": user_id},
-                {"$set": {"score_avg": float(
-                    new_avg), "num_games": int(new_games)}}
-                | member_of_chat(chat_id)
-            )
-            return (new_games, new_avg)
+                new_games = num_games + old_games
+                new_avg = ((old_avg * old_games) +
+                           (score_avg * num_games)) / new_games
+                while (self.check_lock(user_id)):
+                    pass
+                res = self.db.update_one(
+                    {"_id": user_id},
+                    {"$set": {"score_avg": float(new_avg),
+                              "num_games": int(new_games)}} 
+                    | member_of_chat(chat_id)
+                )
+                return (new_games, new_avg)
 
-        if res.matched_count == 0:
-            raise self.UserNotFound
+            if res.matched_count == 0:
+                raise self.UserNotFound
+        finally:
+            self.db.update_one({"_id": user_id},
+                               {"$set": {"lock": False}})
 
     def print_stats(self, user_id: int, chat_id: int, chat_latest_game: int) -> str:
         self.insert_chat_member(user_id, chat_id)
         self.db.update_one({"_id": user_id} | streak_check(chat_latest_game),
                            {"$set": {"streak": 0}})
-        user_data = self.get_user_data(user_id)
+        user_data = self.get_user_data(user_id, write=False)
 
         if user_data.streak > 1:
             streak_status = " 🔥"

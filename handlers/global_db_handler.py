@@ -106,3 +106,16 @@ class GlobalDB:
         
     def clear_debug(self, admin_id: int) -> None:
         self.global_data.db.delete_many({"member_of_chats": admin_id, "_id": {"$ne": admin_id}})
+        
+    def test_lock(self, admin_id: int) -> str:
+        self.global_data.get_user_data(admin_id, write=True)
+        
+    def toggle_lock(self, admin_id: int) -> str:
+        old_state = self.global_data.db.find_one({"_id": admin_id})['lock']
+        new_state = not old_state
+        self.global_data.db.update_one({"_id": admin_id},
+                           {"$set": {"lock": new_state}})
+        return new_state
+    
+    def check_lock(self, admin_id: int) -> str:
+        return self.global_data.check_lock(admin_id)

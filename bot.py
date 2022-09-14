@@ -239,6 +239,32 @@ def restart(message):
         bot.reply_to(
             message, f"Latest game in the database is *{score_db.get_latest_game()}*\!", parse_mode="MarkdownV2")
 
+@ bot.message_handler(commands=['adminlock'])
+def test_lock(message):
+    """ Test lock feature """
+    id = message.from_user.id
+    if id == ADMIN_ID:
+        score_db.test_lock(id)
+        bot.reply_to(
+            message, "Successfuly retrieved user data with write=True!")
+        
+@ bot.message_handler(commands=['admintoggle'])
+def toggle_lock(message):
+    """ Test lock feature """
+    id = message.from_user.id
+    if id == ADMIN_ID:
+        new_state = score_db.toggle_lock(id)
+        bot.reply_to(
+            message, f"Successfuly toggled lock to {new_state}!")
+        
+@ bot.message_handler(commands=['adminchecklock'])
+def check_lock(message):
+    """ Test lock feature """
+    id = message.from_user.id
+    if id == ADMIN_ID:
+        state = score_db.check_lock(id)
+        bot.reply_to(
+            message, f"Lock is currently set to {state}!")
 
 @server.route(f'/{API_KEY}', methods=['POST'])
 def get_updates():

@@ -220,6 +220,8 @@ class WordleStats:
                                {"$set": {"lock": False}})
 
     def print_stats(self, user_id: int, chat_id: int, chat_latest_game: int) -> str:
+        while (self.check_lock(user_id)):
+            pass
         self.insert_chat_member(user_id, chat_id)
         self.db.update_one({"_id": user_id} | streak_check(chat_latest_game),
                            {"$set": {"streak": 0}})
@@ -259,6 +261,16 @@ class WordleStats:
         self.db.update_one({"_id": user_id}, member_of_chat(chat_id))
 
     def print_leaderboard(self, user_id: int, chat_id: int, chat_latest_game: int) -> str:
+        def check_chat_lock(chat_id: int) -> bool:
+            cursor = self.db.find({"member_of_chats": chat_id})
+            res = False
+            for elem in cursor:
+                res = res or elem['lock']
+            return res
+                
+        while (check_chat_lock(chat_id)):
+            pass
+        
         self.insert_chat_member(user_id, chat_id)
         self.db.update_many({"member_of_chats": chat_id} | streak_check(chat_latest_game),
                             {"$set": {"streak": 0}})

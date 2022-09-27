@@ -42,7 +42,12 @@ class WordleStats:
         self.db = db
 
     def check_lock(self, user_id: int) -> bool:
-        return self.db.find_one({"_id": user_id})['lock']
+        user_data = self.db.find_one({"_id": user_id})
+        if user_data == None:
+            raise self.UserNotFound
+        else:
+            return user_data['lock']
+        
 
     UserData = namedtuple(
         'UserData', ['username', 'num_games', 'streak', 'score_avg', 'last_game', 'last_active_chat', 'toggle_retroactive'])
@@ -125,9 +130,9 @@ class WordleStats:
             - update (bool): Whether update has persisted
             - update_msg (bool): Whether to send message (message content dependent on update)
         """
-        while (self.check_lock(user_id)):
-            pass
         try:
+            while (self.check_lock(user_id)):
+                pass
             _, num_games, _, score_avg, last_game, last_active_chat, retroactive_updates = self.get_user_data(
                 user_id, write=True)
 

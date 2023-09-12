@@ -20,7 +20,7 @@ At the height of my Wordle craze, I would manually calculate score averages for 
     <figcaption>Examples of printing leaderboard (left) and auto-updating stats (right) capabilities</figcaption>
   </figure>
   <s><h3>🔗 Check out the live bot on telegram (<a href="https://t.me/WordleScoreboardBot">@WordleScoreboardBot</a>)!</h3></s>
-  <h3>Note: due to the deprecation of Heroku's free tier and the depreciation in usage from family and friends, the deployment of this project is no longer being supported.</h3>
+  <h3>Note: due to the deprecation of Heroku's free tier and the depreciation in usage from family and friends, this project's deployment is no longer being supported.</h3>
 </div>
 
 ## ⭐ Features ##
